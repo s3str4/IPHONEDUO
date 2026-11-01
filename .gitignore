@@ -1,0 +1,6 @@
+.godot/
+export/
+build/
+*.ipa
+*.xcarchive
+.DS_Store
