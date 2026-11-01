@@ -17,11 +17,10 @@ var _glow_material: ShaderMaterial
 
 func _ready() -> void:
 	_body_material = ShaderMaterial.new()
-	_body_material.shader = load("res://shaders/ps1_lit.gdshader")
-	_body_material.set_shader_parameter("affine_strength", 0.0)
-	_body_material.set_shader_parameter("baked_light", 0.3)
+	_body_material.shader = load("res://shaders/night_car.gdshader")
+	_body_material.set_shader_parameter("fill", 0.15)
 	_glow_material = ShaderMaterial.new()
-	_glow_material.shader = load("res://shaders/ps1_glow.gdshader")
+	_glow_material.shader = load("res://shaders/night_glow.gdshader")
 	_glow_material.set_shader_parameter("intensity", 0.9)
 	_ghost_mesh = VehicleMesh.build(VehicleMesh.Kind.SPORT, Color(0.35, 0.05, 0.05), _body_material, _glow_material, false, false)
 	for kind in [VehicleMesh.Kind.SPORT, VehicleMesh.Kind.SEDAN, VehicleMesh.Kind.TRUCK]:

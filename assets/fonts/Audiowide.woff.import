@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://btw7qdj88fruj"
-path="res://.godot/imported/PressStart2P.woff-3f88eda39640014d8084632da529fd42.fontdata"
+uid="uid://bnrlumuctwon1"
+path="res://.godot/imported/Audiowide.woff-9a40a3a048c97e700bbddcbf4c425904.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/PressStart2P.woff"
-dest_files=["res://.godot/imported/PressStart2P.woff-3f88eda39640014d8084632da529fd42.fontdata"]
+source_file="res://assets/fonts/Audiowide.woff"
+dest_files=["res://.godot/imported/Audiowide.woff-9a40a3a048c97e700bbddcbf4c425904.fontdata"]
 
 [params]
 

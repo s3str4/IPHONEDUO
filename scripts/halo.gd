@@ -1,6 +1,6 @@
 class_name Halo
 extends RefCounted
-## Halos lumineux face caméra (voir shaders/ps1_halo.gdshader).
+## Halos lumineux face caméra (voir shaders/night_halo.gdshader).
 
 static var _material: ShaderMaterial
 
@@ -8,7 +8,7 @@ static var _material: ShaderMaterial
 static func material() -> ShaderMaterial:
 	if _material == null:
 		_material = ShaderMaterial.new()
-		_material.shader = load("res://shaders/ps1_halo.gdshader")
+		_material.shader = load("res://shaders/night_halo.gdshader")
 	return _material
 
 

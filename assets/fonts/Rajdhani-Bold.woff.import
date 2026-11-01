@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://j221js6uxbn7"
-path="res://.godot/imported/PixelifySans.woff-085c4853faa97980f01c455d86b8fa78.fontdata"
+uid="uid://bl3k115nh58o5"
+path="res://.godot/imported/Rajdhani-Bold.woff-40a261c44718aaeffe1b0fd3498ea9c7.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/PixelifySans.woff"
-dest_files=["res://.godot/imported/PixelifySans.woff-085c4853faa97980f01c455d86b8fa78.fontdata"]
+source_file="res://assets/fonts/Rajdhani-Bold.woff"
+dest_files=["res://.godot/imported/Rajdhani-Bold.woff-40a261c44718aaeffe1b0fd3498ea9c7.fontdata"]
 
 [params]
 

@@ -3,7 +3,8 @@ extends RefCounted
 ## Construit la route par tronçons de CHUNK_LENGTH mètres : chaussée, accotements,
 ## glissières, terrain, arbres, lampadaires et leurs reflets sur la route mouillée.
 ## Tout est en géométrie low-poly à couleurs de sommet ; la lumière des
-## lampadaires est précalculée dans l'alpha des couleurs (voir ps1_lit.gdshader).
+## lampadaires est précalculée dans l'alpha des couleurs (voir night_surface.gdshader) :
+## elle éclaire au loin, les lumières proches étant calculées par pixel.
 ##
 ## Chaque région suit l'ambiance de son tronçon (RouteMap.THEMES) : lampadaires
 ## sodium ou LED, sol, arbres, eau, tunnels, et les décors de Scenery.
@@ -52,6 +53,8 @@ var arrival_s := -1.0
 var road_material: ShaderMaterial
 var env_material: ShaderMaterial
 var glow_material: ShaderMaterial
+var ground_material: ShaderMaterial
+var cone_material: ShaderMaterial
 
 var _seed := 1
 ## Matériaux par couleur de lampadaire (la lumière précalculée en prend la teinte).
@@ -63,6 +66,9 @@ var _lamp_cache_from := 0.0
 var _lamp_cache_to := 0.0
 ## Ambiance du tronçon en construction.
 var _theme: Dictionary
+## Terrain et cônes de lumière du tronçon en construction.
+var _ground: SurfaceTool
+var _cones: SurfaceTool
 ## Halos du tronçon en cours de construction.
 var _halo: SurfaceTool
 var _noise := FastNoiseLite.new()
@@ -74,23 +80,41 @@ func _init(p_track: Track, seed: int = 1) -> void:
 	_noise.seed = seed
 	_noise.frequency = 0.012
 	_noise.fractal_octaves = 3
-	var lit := load("res://shaders/ps1_lit.gdshader")
+	var surface := load("res://shaders/night_surface.gdshader")
 	road_material = ShaderMaterial.new()
-	road_material.shader = lit
-	road_material.set_shader_parameter("albedo_tex", make_road_texture())
-	road_material.set_shader_parameter("affine_strength", 0.3)
-	road_material.set_shader_parameter("wet_sheen", 2.2)
+	road_material.shader = surface
+	road_material.set_shader_parameter("albedo_tex", load("res://assets/textures/road.png"))
+	road_material.set_shader_parameter("wet", 0.9)
+	road_material.set_shader_parameter("reflectivity", 0.85)
+	road_material.set_shader_parameter("specular_strength", 0.5)
+	road_material.set_shader_parameter("ripples", 0.25)
 	env_material = ShaderMaterial.new()
-	env_material.shader = lit
-	env_material.set_shader_parameter("affine_strength", 0.0)
+	env_material.shader = surface
+	env_material.set_shader_parameter("wet", 0.25)
+	env_material.set_shader_parameter("specular_strength", 0.25)
+	ground_material = env_material.duplicate()
+	ground_material.set_shader_parameter("wet", 0.1)
 	glow_material = ShaderMaterial.new()
-	glow_material.shader = load("res://shaders/ps1_glow.gdshader")
+	glow_material.shader = load("res://shaders/night_glow.gdshader")
+	cone_material = ShaderMaterial.new()
+	cone_material.shader = load("res://shaders/night_cone.gdshader")
 	water_material = ShaderMaterial.new()
-	water_material.shader = lit
-	water_material.set_shader_parameter("affine_strength", 0.0)
-	water_material.set_shader_parameter("wet_sheen", 1.6)
-	water_material.set_shader_parameter("albedo_color", Color(0.5, 0.6, 0.75))
-	_materials[RouteMap.THEMES["autoroute"]["lamp_color"]] = [road_material, env_material]
+	water_material.shader = surface
+	water_material.set_shader_parameter("wet", 1.0)
+	water_material.set_shader_parameter("reflectivity", 1.0)
+	water_material.set_shader_parameter("specular_strength", 1.2)
+	water_material.set_shader_parameter("ripples", 0.6)
+	_materials[RouteMap.THEMES["autoroute"]["lamp_color"]] = _tinted(RouteMap.THEMES["autoroute"]["lamp_color"])
+
+
+## Matériaux route / décor / terrain teintés par la lumière des lampadaires.
+func _tinted(c: Color) -> Array:
+	var out := []
+	for m in [road_material, env_material, ground_material]:
+		var d: ShaderMaterial = m.duplicate()
+		d.set_shader_parameter("baked_tint", Vector3(c.r, c.g, c.b))
+		out.append(d)
+	return out
 
 
 ## Ambiance du tronçon qui contient s.
@@ -98,16 +122,11 @@ func theme_at(s: float) -> Dictionary:
 	return RouteMap.theme(RouteMap.stage_at(s), choices)
 
 
-## Matériaux route / décor teintés par la lumière des lampadaires de l'ambiance.
+## Matériaux [route, décor, terrain] de l'ambiance (teinte de ses lampadaires).
 func _materials_for(theme: Dictionary) -> Array:
 	var c: Color = theme.get("lamp_color", LAMP_COLOR)
 	if not _materials.has(c):
-		var road: ShaderMaterial = road_material.duplicate()
-		var env: ShaderMaterial = env_material.duplicate()
-		var tint := Vector3(c.r, c.g, c.b) * 2.4
-		road.set_shader_parameter("baked_tint", tint)
-		env.set_shader_parameter("baked_tint", tint)
-		_materials[c] = [road, env]
+		_materials[c] = _tinted(c)
 	return _materials[c]
 
 
@@ -228,6 +247,54 @@ func ground_height(s: float, x: float) -> float:
 	return lerpf(h, 0.0, _station_flat(s, x))
 
 
+# --- Lumières proches (calculées par pixel) -----------------------------------
+
+## Sources lumineuses entre s0 et s1 : [position, couleur, portée, intensité]
+## (intensité négative : balise clignotante). Voir LightField.
+func light_sources(s0: float, s1: float) -> Array:
+	var out := []
+	for lamp in lamps_between(s0, s1):
+		if lamp[1] != 0:
+			var c: Color = theme_at(lamp[0]).get("lamp_color", LAMP_COLOR)
+			out.append([_road_pos(lamp[0], 6.5 * lamp[1], LAMP_HEIGHT - 0.6), c, 36.0, 7.0])
+	var ts := ceilf(s0 / 8.0) * 8.0
+	while ts < s1:
+		if in_tunnel(ts) and ts < s0 + 160.0:
+			out.append([_road_pos(ts, 0.0, 6.4), LAMP_COLOR, 14.0, 4.0])
+		ts += 8.0
+	for st in stations + PackedFloat32Array([arrival_s]):
+		if st < s0 - 60.0 or st > s1 + 60.0:
+			continue
+		out.append([_road_pos(st, 0.0, 6.2), Color(1.0, 0.85, 0.6), 22.0, 5.0])
+		if st == arrival_s:
+			continue
+		var empty := events != null and is_equal_approx(st, events.plan["station_vide"])
+		var c := st - STATION_SITE_BACK
+		for ps in [c - 9.0, c + 9.0]:
+			out.append([_road_pos(ps, 20.0, 5.0), Color(0.35, 0.55, 1.0) if empty else STATION_LIGHT, 32.0, 7.0])
+		out.append([_road_pos(c - 30.0, 11.5, 12.0), Color(0.3, 0.5, 1.0) if empty else SIGN_COLOR, 24.0, 4.0])
+	for k in RouteMap.STAGES.size() - 1:
+		var nose := RouteMap.fork_s(k) + RouteMap.DIVIDER_START
+		if nose >= s0 and nose < s1:
+			out.append([_road_pos(nose, 0.0, 2.0), Color(1.0, 0.75, 0.1), 16.0, -5.0])
+	if theme_at(s0).get("bridges", true):
+		for br in _every(BRIDGE_SPACING, 620.0, s0, s1):
+			if not _near_checkpoint(br, 200.0) and not in_tunnel(br):
+				out.append([_road_pos(br, 0.0, 6.5), Color(0.85, 0.95, 1.0), 18.0, 5.0])
+	if theme_at(s0).get("billboards", true):
+		for bs in _every(BILLBOARD_SPACING, 330.0, s0, s1):
+			if not _near_checkpoint(bs, 160.0) and not in_tunnel(bs) and not _near_panneau(bs):
+				var entry: Array = BILLBOARDS[posmod(int(bs / BILLBOARD_SPACING), BILLBOARDS.size())]
+				out.append([_road_pos(bs, 13.0, 6.0), entry[1], 20.0, 3.5])
+	if events != null:
+		for ps in events.panneau_at(s0, s1):
+			out.append([_road_pos(ps, 13.0, 6.0), Color(0.95, 0.25, 0.5), 20.0, 3.5])
+		var hs: float = events.plan["stoppeuse"]
+		if hs >= s0 and hs < s1:
+			out.append([_road_pos(hs + 1.5, 8.1, 2.6), Color(1.0, 0.95, 0.8), 10.0, 5.0])
+	return out
+
+
 # --- Construction ------------------------------------------------------------
 
 func build_chunk(index: int) -> MeshInstance3D:
@@ -243,6 +310,8 @@ func build_chunk(index: int) -> MeshInstance3D:
 	var glow := _new_tool()
 	var water := _new_tool()
 	_halo = _new_tool()
+	_ground = _new_tool()
+	_cones = _new_tool()
 	_build_road(road, s0, s1)
 	_build_shoulders_and_ground(env, water, s0, s1)
 	_build_rails(env, s0, s1)
@@ -277,23 +346,36 @@ func build_chunk(index: int) -> MeshInstance3D:
 				_build_bridge(env, glow, br)
 	labels.append_array(Scenery.build(self, env, glow, index, s0, s1))
 
+	# Terrain : sommets partagés et normales lissées.
+	_ground.index()
+	_ground.generate_normals()
 	var mats := _materials_for(_theme)
+	var mi := MeshInstance3D.new()
+	mi.mesh = _assemble([[env, mats[1]], [_ground, mats[2]], [glow, glow_material],
+			[_cones, cone_material], [_halo, Halo.material()]])
+	mi.name = "Chunk%d" % index
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Route et eau à part : la caméra de réflexion ne doit pas les voir.
+	var wet := MeshInstance3D.new()
+	wet.mesh = _assemble([[road, mats[0]], [water, water_material]])
+	wet.layers = 1 << (Reflection.WET_LAYER - 1)
+	wet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.add_child(wet)
+	for l in labels:
+		if l != null:
+			mi.add_child(l)
+	return mi
+
+
+func _assemble(parts: Array) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
-	for part in [[road, mats[0]], [env, mats[1]], [water, water_material], [glow, glow_material],
-			[_halo, Halo.material()]]:
+	for part in parts:
 		var arrays: Array = part[0].commit_to_arrays()
 		if arrays[Mesh.ARRAY_VERTEX] == null or arrays[Mesh.ARRAY_VERTEX].is_empty():
 			continue
 		mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 		mesh.surface_set_material(mesh.get_surface_count() - 1, part[1])
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.name = "Chunk%d" % index
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	for l in labels:
-		if l != null:
-			mi.add_child(l)
-	return mi
+	return mesh
 
 
 # --- Décors : pylônes, panneaux, ponts ------------------------------------------
@@ -401,7 +483,7 @@ func _build_billboard(env: SurfaceTool, glow: SurfaceTool, s: float, k: int) -> 
 	label.modulate = Color(1.0, 1.0, 0.95)
 	label.outline_size = 12
 	label.outline_modulate = Color(0, 0, 0, 0.6)
-	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	label.transform = track.transform_at(s, x, 7.7)
 	label.position += track.forward_at(s) * -0.3
 	return label
@@ -492,7 +574,7 @@ func _build_gantry(env: SurfaceTool, glow: SurfaceTool, s: float, text: String) 
 	label.pixel_size = 0.016
 	label.outline_size = 0
 	label.modulate = Color(1.0, 0.86, 0.55)
-	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	label.transform = track.transform_at(s, 0.0, 7.2)
 	label.position += track.forward_at(s) * -0.45
 	return label
@@ -510,7 +592,7 @@ func _build_sign(env: SurfaceTool, s: float, text: String) -> Label3D:
 	label.pixel_size = 0.012
 	label.outline_size = 0
 	label.modulate = Color(0.95, 0.95, 1.0)
-	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	label.transform = track.transform_at(s, 10.0, 4.0)
 	label.position += track.forward_at(s) * -0.1
 	return label
@@ -534,12 +616,13 @@ func _vertex(st: SurfaceTool, pos: Vector3, color: Color, light: float, uv := Ve
 
 
 ## Quadrilatère a-b-c-d (sens horaire vu de la face visible).
-func _quad(st: SurfaceTool, p: Array, colors: Array, lights: Array, uvs: Array = []) -> void:
+func _quad(st: SurfaceTool, p: Array, colors: Array, lights: Array, uvs: Array = [], flat := true) -> void:
 	var n: Vector3 = (p[3] - p[0]).cross(p[1] - p[0]).normalized()
 	for i in [0, 1, 2, 0, 2, 3]:
 		st.set_color(Color(colors[i].r, colors[i].g, colors[i].b, lights[i]))
 		st.set_uv(uvs[i] if not uvs.is_empty() else Vector2.ZERO)
-		st.set_normal(n)
+		if flat:
+			st.set_normal(n)
 		st.add_vertex(p[i])
 
 
@@ -613,7 +696,11 @@ func _strip(st: SurfaceTool, sa: float, sb: float, xa: float, xb: float, ha: flo
 		p = [p[0], p[3], p[2], p[1]]
 		l = [l[0], l[3], l[2], l[1]]
 		c = [c[0], c[3], c[2], c[1]]
-	_quad(st, p, c, l)
+	# Terrain : normales lissées après coup (voir build_chunk).
+	if use_ground:
+		_quad(_ground, p, c, l, [], false)
+	else:
+		_quad(st, p, c, l)
 
 
 func _build_rails(st: SurfaceTool, s0: float, s1: float) -> void:
@@ -658,26 +745,30 @@ func _build_lamps(env: SurfaceTool, glow: SurfaceTool, s0: float, s1: float) -> 
 		# Ampoule.
 		_glow_box(glow, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.45), yaw, Vector3(0.9, 0.25, 0.5), lamp_color, 1.0)
 		Halo.add(_halo, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.4), 2.6, lamp_color, 0.5)
-		# Reflet sur la route mouillée, étiré vers la caméra (derrière, s plus petit).
-		_reflection(glow, s, LAMP_POOL_X * side * 0.9, 18.0, 1.6, lamp_color, 0.55)
+		# Cône de lumière dans la pluie.
+		_cone(_cones, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.6), _road_pos(s, 5.6 * side, 0.0), 0.35, 4.2,
+				lamp_color, 0.32 * absf(_theme.get("rain", 1.0)) + 0.08)
 
 
-## Reflet allongé couché sur la chaussée : intense près de la source (s_src),
-## s'éteint sur `length` mètres vers l'arrière.
-func _reflection(st: SurfaceTool, s_src: float, x: float, length: float, width: float,
-		color: Color, strength: float) -> void:
-	var n := int(ceil(length / Track.STEP))
-	for i in n:
-		var sa := s_src - i * Track.STEP
-		var sb := sa - Track.STEP
-		var ga := 1.0 - float(i) / n
-		var gb := 1.0 - float(i + 1) / n
-		for half in [-1.0, 1.0]:
-			var xc := x
-			var xe: float = x + half * width * 0.5
-			var p := [_road_pos(sa, xc, 0.03), _road_pos(sa, xe, 0.03), _road_pos(sb, xe, 0.03), _road_pos(sb, xc, 0.03)]
-			var uvs := [Vector2(0, ga), Vector2(0, 0), Vector2(0, 0), Vector2(0, gb)]
-			_quad(st, p, [color, color, color, color], [strength, strength, strength, strength], uvs)
+## Cône de lumière de `top` (rayon r0) à `bottom` (rayon r1) ; UV.y va de 0
+## (en haut) à 1 (au sol), les normales pointent vers l'extérieur.
+func _cone(st: SurfaceTool, top: Vector3, bottom: Vector3, r0: float, r1: float, color: Color, strength: float) -> void:
+	var sides := 12
+	var axis := (bottom - top).normalized()
+	var u := axis.cross(Vector3.FORWARD if absf(axis.z) < 0.9 else Vector3.RIGHT).normalized()
+	var v := axis.cross(u)
+	for i in sides:
+		var a0 := TAU * i / sides
+		var a1 := TAU * (i + 1) / sides
+		var d0 := u * cos(a0) + v * sin(a0)
+		var d1 := u * cos(a1) + v * sin(a1)
+		var quad := [[top + d0 * r0, d0, Vector2(float(i) / sides, 0.0)], [bottom + d0 * r1, d0, Vector2(float(i) / sides, 1.0)],
+				[bottom + d1 * r1, d1, Vector2(float(i + 1) / sides, 1.0)], [top + d1 * r0, d1, Vector2(float(i + 1) / sides, 0.0)]]
+		for k in [0, 1, 2, 0, 2, 3]:
+			st.set_color(Color(color.r, color.g, color.b, strength))
+			st.set_normal(quad[k][1])
+			st.set_uv(quad[k][2])
+			st.add_vertex(quad[k][0])
 
 
 func _build_trees(st: SurfaceTool, index: int, s0: float, s1: float) -> void:
@@ -762,28 +853,6 @@ func _glow_box(st: SurfaceTool, base: Vector3, yaw: float, size: Vector3, color:
 	var uvs := [Vector2(0, 1), Vector2(0, 1), Vector2(0, 1), Vector2(0, 1)]
 	for f in [[0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [3, 7, 4, 0], [0, 1, 2, 3]]:
 		_quad(st, [c[f[0]], c[f[1]], c[f[2]], c[f[3]]], cols, lights, uvs)
-
-
-## Texture d'asphalte 32×64 : grain, lignes de rive continues, deux lignes de
-## voie en tirets (motif de 12 m : 4,5 m de trait, 7,5 m de vide).
-static func make_road_texture() -> ImageTexture:
-	var w := 48
-	var h := 64
-	var img := Image.create(w, h, false, Image.FORMAT_RGB8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	for y in h:
-		for x in w:
-			var g := 0.32 + rng.randf_range(-0.06, 0.06)
-			img.set_pixel(x, y, Color(g, g, g * 1.04))
-	var paint := Color(0.92, 0.9, 0.82)
-	for y in h:
-		for x in [1, w - 2]:
-			img.set_pixel(x, y, paint)
-		if y < int(h * 0.375):
-			for lane in [w / 3, 2 * w / 3]:
-				img.set_pixel(lane, y, paint)
-	return ImageTexture.create_from_image(img)
 
 
 func _hash(k: int) -> float:

@@ -246,7 +246,7 @@ static func _fork_signs(b: RoadBuilder, env: SurfaceTool, glow: SurfaceTool, s: 
 		label.pixel_size = 0.013
 		label.outline_size = 0
 		label.modulate = Color(1, 1, 1)
-		label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+		label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		label.transform = b.track.transform_at(s, x, h + 0.75)
 		label.position += back * 1.3
 		labels.append(label)

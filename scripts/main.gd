@@ -79,6 +79,9 @@ var _rain := 1.0
 @onready var hud: Hud = $Hud
 @onready var environment: Environment = $WorldEnvironment.environment
 @onready var rain: CPUParticles3D = $Camera/Rain
+@onready var reflection: Reflection = $Reflection
+
+var _lights: LightField
 
 
 func _ready() -> void:
@@ -107,6 +110,8 @@ func _ready() -> void:
 	traffic = Traffic.new(seed)
 	_sky_material = environment.sky.sky_material
 	_post_material = $Post/Screen.material
+	_lights = LightField.new()
+	reflection.source = camera
 
 	game.station_reached.connect(_on_station)
 	game.near_miss.connect(func(pts: int) -> void: hud.popup("FRÔLÉ +%d" % pts, Hud.WHITE, 8, 210.0))
@@ -234,6 +239,7 @@ func _process(delta: float) -> void:
 	hud.set_values(game.time_left, game.score, game.segment(), game.multiplier(), car.speed_kmh(), game.progress())
 	_update_dawn()
 	_update_weather(delta)
+	_update_lighting(delta)
 	_update_fork_prompt()
 	while not _radio_queue.is_empty() and not hud.radio_busy():
 		var line: Array = _radio_queue.pop_front()
@@ -257,8 +263,21 @@ func _update_dawn() -> void:
 	_sky_material.set_shader_parameter("dawn", d)
 	_sky_material.set_shader_parameter("horizon", NIGHT_HORIZON.lerp(DAWN_HORIZON, d))
 	_sky_material.set_shader_parameter("zenith", NIGHT_ZENITH.lerp(DAWN_ZENITH, d * d))
-	RenderingServer.global_shader_parameter_set("ps1_fog_color", _fog_tint.lerp(DAWN_FOG, d * 0.8))
+	RenderingServer.global_shader_parameter_set("fog_color", _fog_tint.lerp(DAWN_FOG, d * 0.8))
 	environment.ambient_light_energy = lerpf(0.5, 1.6, d)
+
+
+## Lumières proches, phares, reflet de la route, effets de vitesse.
+func _update_lighting(delta: float) -> void:
+	var cam := camera.global_position
+	_lights.update(builder.light_sources(car.s - 60.0, car.s + 300.0), cam, delta)
+	var t := track.transform_at(car.s, car.x)
+	var fwd := -car_view.global_transform.basis.z
+	RenderingServer.global_shader_parameter_set("head_pos", car_view.global_position + fwd * 2.1 + t.basis.y * 0.7)
+	RenderingServer.global_shader_parameter_set("head_dir", (fwd - t.basis.y * 0.06).normalized())
+	reflection.follow(track.point_at(car.s), t.basis.y)
+	var playing := game.state == GameRun.State.RUNNING
+	_post_material.set_shader_parameter("speed", car.speed / CarPhysics.TOP_SPEED if playing else 0.0)
 
 
 ## Brouillard, pluie ou neige de l'ambiance, avec un fondu d'une région à l'autre.
@@ -270,8 +289,8 @@ func _update_weather(delta: float) -> void:
 	var tunnel := builder.in_tunnel(car.s)
 	var weather: float = th.get("rain", 1.0)
 	_rain = lerpf(_rain, 0.0 if tunnel else absf(weather), 1.0 - exp(-3.0 * delta) if delta > 0.0 else 1.0)
-	RenderingServer.global_shader_parameter_set("ps1_fog_start", FOG_START / _fog_scale)
-	RenderingServer.global_shader_parameter_set("ps1_fog_end", FOG_END / _fog_scale)
+	RenderingServer.global_shader_parameter_set("fog_start", FOG_START / _fog_scale)
+	RenderingServer.global_shader_parameter_set("fog_end", FOG_END / _fog_scale)
 	rain.set_weather(_rain, weather < 0.0)
 	# Gouttes sur l'écran : seulement sous la pluie.
 	_post_material.set_shader_parameter("rain", _rain if weather > 0.0 else 0.0)

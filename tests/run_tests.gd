@@ -535,7 +535,7 @@ func _test_events_and_story() -> void:
 	for e in 5:
 		_check(Scenario.ending_text(e, {}).length() > 80, "fins : un texte pour %s" % RouteMap.ENDINGS[e])
 	# Toutes les lettres des textes existent dans la police pixel.
-	var font := Hud.arcade_font()
+	var fonts := [Hud.arcade_font(), Hud.text_font(), Hud.text_font(true)]
 	var texts := Scenario.RADIO.values() + Scenario.DETAILS.values() + [Scenario.EPILOGUE]
 	for en in Scenario.ENDINGS:
 		texts.append_array(en)
@@ -544,6 +544,7 @@ func _test_events_and_story() -> void:
 	var missing := ""
 	for txt in texts:
 		for ch in txt:
-			if ch != "\n" and not font.has_char(ch.unicode_at(0)) and not missing.contains(ch):
-				missing += ch
-	_check(missing == "", "police : tous les caractères des textes existent", missing)
+			for font in fonts:
+				if ch != "\n" and not font.has_char(ch.unicode_at(0)) and not missing.contains(ch):
+					missing += ch
+	_check(missing == "", "polices : tous les caractères des textes existent", missing)

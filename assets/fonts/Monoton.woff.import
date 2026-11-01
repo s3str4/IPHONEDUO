@@ -2,13 +2,13 @@
 
 importer="font_data_dynamic"
 type="FontFile"
-uid="uid://b42g7nquwn5rs"
-path="res://.godot/imported/PixelifySans-Bold.woff-abae6df98c0c2b59cb06f31717a858a0.fontdata"
+uid="uid://bms5igwlj4u31"
+path="res://.godot/imported/Monoton.woff-eaabc1add268995652c60b112519c62e.fontdata"
 
 [deps]
 
-source_file="res://assets/fonts/PixelifySans-Bold.woff"
-dest_files=["res://.godot/imported/PixelifySans-Bold.woff-abae6df98c0c2b59cb06f31717a858a0.fontdata"]
+source_file="res://assets/fonts/Monoton.woff"
+dest_files=["res://.godot/imported/Monoton.woff-eaabc1add268995652c60b112519c62e.fontdata"]
 
 [params]
 

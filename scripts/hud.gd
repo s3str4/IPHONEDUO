@@ -2,7 +2,8 @@ class_name Hud
 extends CanvasLayer
 ## Interface en jeu (résolution interne 270×480) : chrono, score, jauge des
 ## étapes, multiplicateur, compteur de vitesse, messages flottants, écrans de
-## titre et de fin. Polices pixel sans lissage (assets/fonts).
+## titre et de fin. Polices néon (assets/fonts) : Audiowide pour les chiffres
+## et les titres, Rajdhani pour les textes, Monoton pour le logo.
 
 const AMBER := Color(1.0, 0.82, 0.45)
 const PINK := Color(1.0, 0.4, 0.6)
@@ -14,6 +15,7 @@ const SPEED_SEGMENTS := 14
 static var _arcade: FontFile
 static var _text: FontFile
 static var _text_bold: FontFile
+static var _logo: FontFile
 
 var _time: Label
 var _time_caption: Label
@@ -42,25 +44,26 @@ var _fork_right: Label
 var _card: Label
 
 
+## Chiffres et titres (Audiowide).
 static func arcade_font() -> FontFile:
 	if _arcade == null:
-		_arcade = _pixel_font("res://assets/fonts/PressStart2P.woff")
-		_text = _pixel_font("res://assets/fonts/PixelifySans.woff")
-		_text_bold = _pixel_font("res://assets/fonts/PixelifySans-Bold.woff")
+		_arcade = load("res://assets/fonts/Audiowide.woff")
+		_text = load("res://assets/fonts/Rajdhani-SemiBold.woff")
+		_text_bold = load("res://assets/fonts/Rajdhani-Bold.woff")
+		_logo = load("res://assets/fonts/Monoton.woff")
 	return _arcade
 
 
+## Textes (Rajdhani).
 static func text_font(bold := false) -> FontFile:
 	arcade_font()
 	return _text_bold if bold else _text
 
 
-static func _pixel_font(path: String) -> FontFile:
-	var f: FontFile = load(path).duplicate()
-	f.antialiasing = TextServer.FONT_ANTIALIASING_NONE
-	f.hinting = TextServer.HINTING_NONE
-	f.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
-	return f
+## Logo (Monoton, tubes de néon).
+static func logo_font() -> FontFile:
+	arcade_font()
+	return _logo
 
 
 func _ready() -> void:
@@ -79,12 +82,12 @@ func _ready() -> void:
 	_play.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_play.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(_play)
-	_time_caption = _label(_play, "TEMPS", arcade_font(), 8, AMBER, Vector2(0, 6), HORIZONTAL_ALIGNMENT_CENTER, true)
-	_time = _label(_play, "88", arcade_font(), 24, AMBER, Vector2(0, 18), HORIZONTAL_ALIGNMENT_CENTER, true)
-	_label(_play, "SCORE", arcade_font(), 8, DIM, Vector2(8, 6), HORIZONTAL_ALIGNMENT_LEFT)
-	_score = _label(_play, "0", arcade_font(), 8, WHITE, Vector2(8, 19), HORIZONTAL_ALIGNMENT_LEFT)
-	_stage = _label(_play, "ÉTAPE 1/5", arcade_font(), 8, DIM, Vector2(-8, 6), HORIZONTAL_ALIGNMENT_RIGHT)
-	_mult = _label(_play, "", arcade_font(), 8, AMBER, Vector2(-8, 19), HORIZONTAL_ALIGNMENT_RIGHT)
+	_time_caption = _label(_play, "TEMPS", text_font(true), 10, AMBER, Vector2(0, 4), HORIZONTAL_ALIGNMENT_CENTER, true)
+	_time = _label(_play, "88", arcade_font(), 26, AMBER, Vector2(0, 14), HORIZONTAL_ALIGNMENT_CENTER, true)
+	_label(_play, "SCORE", text_font(true), 10, DIM, Vector2(8, 4), HORIZONTAL_ALIGNMENT_LEFT)
+	_score = _label(_play, "0", arcade_font(), 10, WHITE, Vector2(8, 17), HORIZONTAL_ALIGNMENT_LEFT)
+	_stage = _label(_play, "ÉTAPE 1/5", text_font(true), 10, DIM, Vector2(-8, 4), HORIZONTAL_ALIGNMENT_RIGHT)
+	_mult = _label(_play, "", arcade_font(), 10, AMBER, Vector2(-8, 17), HORIZONTAL_ALIGNMENT_RIGHT)
 
 	# Jauge des étapes : la nuit vers l'aube, une case par étape.
 	var seg_w := 30.0
@@ -99,8 +102,8 @@ func _ready() -> void:
 		_progress.append(r)
 
 	# Compteur : chiffre + barre segmentée.
-	_speed = _label(_play, "0", arcade_font(), 16, WHITE, Vector2(0, -46), HORIZONTAL_ALIGNMENT_CENTER, true, true)
-	_label(_play, "KM/H", arcade_font(), 8, DIM, Vector2(0, -27), HORIZONTAL_ALIGNMENT_CENTER, true, true)
+	_speed = _label(_play, "0", arcade_font(), 22, WHITE, Vector2(0, -52), HORIZONTAL_ALIGNMENT_CENTER, true, true)
+	_label(_play, "KM/H", text_font(true), 10, DIM, Vector2(0, -28), HORIZONTAL_ALIGNMENT_CENTER, true, true)
 	for i in SPEED_SEGMENTS:
 		var r := ColorRect.new()
 		r.size = Vector2(9, 4)
@@ -112,8 +115,8 @@ func _ready() -> void:
 		_speed_bar.append(r)
 
 	# Directions à la prochaine bifurcation.
-	_fork_left = _label(_play, "", arcade_font(), 8, Scenery.LEFT_SIGN.lightened(0.45), Vector2(8, 56), HORIZONTAL_ALIGNMENT_LEFT)
-	_fork_right = _label(_play, "", arcade_font(), 8, Scenery.RIGHT_SIGN.lightened(0.5), Vector2(-8, 56), HORIZONTAL_ALIGNMENT_RIGHT)
+	_fork_left = _label(_play, "", text_font(true), 11, Scenery.LEFT_SIGN.lightened(0.45), Vector2(8, 56), HORIZONTAL_ALIGNMENT_LEFT)
+	_fork_right = _label(_play, "", text_font(true), 11, Scenery.RIGHT_SIGN.lightened(0.5), Vector2(-8, 56), HORIZONTAL_ALIGNMENT_RIGHT)
 	_fork_right.offset_left = -200.0
 	_fork_left.offset_right = 200.0
 
@@ -124,15 +127,15 @@ func _ready() -> void:
 	_radio.size = Vector2(250, 62)
 	_radio.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_play.add_child(_radio)
-	_label(_radio, Scenario.STATION, arcade_font(), 8, PINK, Vector2(6, 5), HORIZONTAL_ALIGNMENT_LEFT)
-	_radio_text = _label(_radio, "", arcade_font(), 8, WHITE, Vector2(6, 18), HORIZONTAL_ALIGNMENT_LEFT)
+	_label(_radio, Scenario.STATION, arcade_font(), 8, PINK, Vector2(6, 4), HORIZONTAL_ALIGNMENT_LEFT)
+	_radio_text = _label(_radio, "", text_font(), 11, WHITE, Vector2(6, 16), HORIZONTAL_ALIGNMENT_LEFT)
 	_radio_text.offset_right = 244.0
 	_radio_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_radio_text.label_settings.line_spacing = 3.0
 	_radio.visible = false
 
 	# Titre de région (« LA FORÊT ») au centre, qui apparaît puis s'efface.
-	_card = _label(_play, "", arcade_font(), 16, WHITE, Vector2(0, 150), HORIZONTAL_ALIGNMENT_CENTER, true, false, 4)
+	_card = _label(_play, "", arcade_font(), 18, WHITE, Vector2(0, 150), HORIZONTAL_ALIGNMENT_CENTER, true, false, 4)
 	_card.modulate.a = 0.0
 
 	_popups = Control.new()
@@ -161,14 +164,14 @@ func _ready() -> void:
 	_overlay_logo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay_logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.add_child(_overlay_logo)
-	_label(_overlay_logo, "ROUTE", arcade_font(), 32, AMBER, Vector2(0, 92), HORIZONTAL_ALIGNMENT_CENTER, true, false, 6)
-	_label(_overlay_logo, "DE NUIT", arcade_font(), 24, PINK, Vector2(0, 132), HORIZONTAL_ALIGNMENT_CENTER, true, false, 6)
-	_overlay_title = _label(_overlay, "", arcade_font(), 16, AMBER, Vector2(0, 166), HORIZONTAL_ALIGNMENT_CENTER, true)
-	_overlay_body = _label(_overlay, "", arcade_font(), 8, WHITE, Vector2(0, 196), HORIZONTAL_ALIGNMENT_CENTER, true)
+	_label(_overlay_logo, "ROUTE", logo_font(), 40, AMBER, Vector2(0, 80), HORIZONTAL_ALIGNMENT_CENTER, true, false, 0)
+	_label(_overlay_logo, "DE NUIT", logo_font(), 30, PINK, Vector2(0, 132), HORIZONTAL_ALIGNMENT_CENTER, true, false, 0)
+	_overlay_title = _label(_overlay, "", arcade_font(), 18, AMBER, Vector2(0, 166), HORIZONTAL_ALIGNMENT_CENTER, true)
+	_overlay_body = _label(_overlay, "", text_font(), 12, WHITE, Vector2(0, 196), HORIZONTAL_ALIGNMENT_CENTER, true)
 	_overlay_body.offset_left = 26.0
 	_overlay_body.offset_right = -26.0
 	_overlay_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_overlay_hint = _label(_overlay, "", arcade_font(), 8, AMBER, Vector2(0, -92), HORIZONTAL_ALIGNMENT_CENTER, true, true)
+	_overlay_hint = _label(_overlay, "", arcade_font(), 9, AMBER, Vector2(0, -92), HORIZONTAL_ALIGNMENT_CENTER, true, true)
 	_overlay.visible = false
 
 
@@ -312,9 +315,12 @@ func _label(parent: Control, text: String, font: Font, size: int, color: Color, 
 	ls.font = font
 	ls.font_size = size
 	ls.font_color = color
-	ls.outline_size = outline if outline >= 0 else maxi(2, size / 6)
-	ls.outline_color = Color(0.02, 0.0, 0.05, 0.95)
-	ls.shadow_size = 0
+	ls.outline_size = outline if outline >= 0 else 1
+	ls.outline_color = Color(0.02, 0.0, 0.05, 0.9)
+	# Lueur de néon : une ombre floue de la couleur du texte, sans décalage.
+	ls.shadow_size = maxi(3, size / 3)
+	ls.shadow_color = Color(color.r, color.g, color.b, 0.4)
+	ls.shadow_offset = Vector2.ZERO
 	ls.line_spacing = 4.0
 	l.label_settings = ls
 	if full_width:

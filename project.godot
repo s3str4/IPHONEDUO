@@ -12,13 +12,14 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 
 [display]
 
-; Rendu interne en basse résolution (look PS1), agrandi sans lissage.
+; Base de l'interface : 270×480 (mise à l'échelle sans flou) ; la 3D est
+; rendue à la pleine résolution de l'écran.
 window/size/viewport_width=270
 window/size/viewport_height=480
 ; Fenêtre de prévisualisation sur PC : portrait, comme l'iPhone.
-window/size/window_width_override=405
-window/size/window_height_override=720
-window/stretch/mode="viewport"
+window/size/window_width_override=540
+window/size/window_height_override=960
+window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 window/handheld/orientation=1
 
@@ -30,32 +31,52 @@ pointing/emulate_touch_from_mouse=true
 
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-textures/canvas_textures/default_texture_filter=0
-textures/default_filters/use_nearest_mipmap_filter=true
+anti_aliasing/quality/msaa_3d=2
+textures/default_filters/anisotropic_filtering_level=2
 
 [shader_globals]
 
-ps1_snap_resolution={
-"type": "vec2",
-"value": Vector2(135, 240)
-}
-ps1_jitter={
-"type": "float",
-"value": 1.0
-}
-ps1_affine={
-"type": "float",
-"value": 0.5
-}
-ps1_fog_color={
+fog_color={
 "type": "color",
 "value": Color(0.05, 0.06, 0.12, 1)
 }
-ps1_fog_start={
+fog_start={
 "type": "float",
 "value": 40.0
 }
-ps1_fog_end={
+fog_end={
 "type": "float",
-"value": 260.0
+"value": 320.0
+}
+lights_tex={
+"type": "sampler2D",
+"value": ""
+}
+light_count={
+"type": "float",
+"value": 0.0
+}
+head_pos={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+head_dir={
+"type": "vec3",
+"value": Vector3(0, 0, -1)
+}
+reflection_tex={
+"type": "sampler2D",
+"value": ""
+}
+mirror_plane={
+"type": "vec4",
+"value": Vector4(0, 1, 0, 0)
+}
+reflection_on={
+"type": "float",
+"value": 0.0
+}
+sky_ambient={
+"type": "color",
+"value": Color(0.12, 0.13, 0.22, 1)
 }

@@ -23,7 +23,11 @@ func _ready() -> void:
 	_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	_mat.billboard_keep_scale = true
-	_mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	# Une goutte à deux mètres de la caméra barrerait l'écran : on efface les
+	# plus proches.
+	_mat.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_ALPHA
+	_mat.distance_fade_min_distance = 3.0
+	_mat.distance_fade_max_distance = 10.0
 	_quad.material = _mat
 	mesh = _quad
 	_apply(false)
