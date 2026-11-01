@@ -170,6 +170,7 @@ stations. Tout synthétisé par code.
 |---|---|---|
 | **M0** Prototype | Route infinie, voiture, pluie, pouce pour tourner | On roule 2 min sur iPhone ou PC sans bug, et c'est agréable |
 | **M1** Tranche jouable | Un chemin complet jusqu'à l'aube : chrono, stations, score, trafic | Une partie complète a un début, une tension et une fin |
+| **M1.5** Passe visuelle | Ciel (lune, nuages, étoiles), halos lumineux, gouttes sur l'écran, reflets plus riches, décors variés (ville au loin, pylônes, panneaux), voiture plus belle, police et interface soignées, stations retravaillées | Une capture d'écran donne envie d'acheter le jeu |
 | **M2** La nuit entière | Les 15 segments, les bifurcations, les 5 fins, les événements, scénario | Les 5 fins sont atteignables, testées |
 | **M3** Radio et son | Les 3 stations, les bruitages, le mixage | Le jeu se joue au casque avec plaisir |
 | **M4** iPhone | Compilation automatique, TestFlight, réglages tactiles, performances | Le jeu tourne à 60 images/s sur ton iPhone |
@@ -184,6 +185,20 @@ stations. Tout synthétisé par code.
   Banc d'essai headless dans `tests/`. Reste à valider : la sensation au
   pouce sur un vrai téléphone (il faut la compilation iOS de M4, ou un test
   sur PC à la souris en attendant).
+- **M1 (tranche jouable) : livré.** Une partie complète de 5 étapes (26 km,
+  6 à 7 min) jusqu'à l'aube : chrono, 4 stations-service qui rendent du temps
+  (auvent, pompes, boutique, totem, portique « STATION n », panneau à 1 km),
+  trafic sur 3 voies (voitures, sportives, camions) qui double et change de
+  voie, chocs, frôlages, chaîne et multiplicateur, ciel qui s'éclaircit
+  jusqu'à l'aube, écrans de titre / d'arrivée / « la nuit gagne », record
+  sauvegardé, rejouer d'une touche.
+  - **Équilibrage** (`scripts/run_config.gd`, mesuré par `tools/balance.gd`) :
+    une moyenne d'environ 240 km/h suffit tout juste ; le pilote automatique
+    (réflexes parfaits) arrive 12 fois sur 12 avec 2 à 40 s d'avance, un
+    pilote bridé à 215 km/h ou qui ignore le trafic n'arrive jamais.
+  - **Règle anti-mur** : le trafic ne ferme jamais les 3 voies devant le
+    joueur (testé, avec un témoin qui prouve que le détecteur voit un mur).
+  - **Reste à faire** : la beauté (M1.5), la sensation au pouce sur iPhone.
 
 ## 13. Rôles
 

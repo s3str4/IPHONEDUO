@@ -15,7 +15,15 @@ const LAMP_COLOR := Color(1.0, 0.62, 0.28)
 const GROUND_COLUMNS := [8.0, 11.0, 16.0, 24.0, 34.0, 46.0, 60.0, 80.0]
 const ROAD_COLUMNS := [-6.0, -3.0, 0.0, 3.0, 6.0]
 
+const STATION_SITE_BACK := 22.0   # la station est juste avant le portique
+const STATION_SITE_HALF := 34.0   # demi-longueur de l'aire de la station
+const STATION_LIGHT := Color(0.85, 0.95, 1.0)
+const SIGN_COLOR := Color(1.0, 0.45, 0.12)
+
 var track: Track
+## Positions (s) des stations-service et de l'arrivée (portiques).
+var stations := PackedFloat32Array()
+var arrival_s := -1.0
 var road_material: ShaderMaterial
 var env_material: ShaderMaterial
 var glow_material: ShaderMaterial
@@ -63,7 +71,42 @@ func lamp_light(s: float, x: float) -> float:
 		var ds := s - float(k) * LAMP_SPACING
 		var dx := x - side * LAMP_POOL_X
 		total += exp(-(ds * ds + dx * dx * 1.6) / (2.0 * LAMP_SIGMA * LAMP_SIGMA))
+	# L'auvent de la station inonde la route et l'aire de lumière.
+	var site := _station_site_offset(s)
+	if site < INF:
+		var sx := x - 22.0
+		total += 1.3 * exp(-(site * site * 0.5 + sx * sx * 0.25) / (2.0 * 14.0 * 14.0))
+	for g in _gantries_near(s):
+		var dg: float = s - g
+		total += 0.8 * exp(-(dg * dg + x * x * 0.3) / (2.0 * 7.0 * 7.0))
 	return clampf(total, 0.0, 1.0)
+
+
+## Distance (m, signée) au centre de l'aire de station la plus proche, INF si loin.
+func _station_site_offset(s: float) -> float:
+	for st in stations:
+		var d := s - (st - STATION_SITE_BACK)
+		if absf(d) < STATION_SITE_HALF + 30.0:
+			return d
+	return INF
+
+
+func _gantries_near(s: float) -> Array:
+	var out := []
+	for st in stations:
+		if absf(s - st) < 40.0:
+			out.append(st)
+	if arrival_s > 0.0 and absf(s - arrival_s) < 40.0:
+		out.append(arrival_s)
+	return out
+
+
+## Poids (0..1) de l'aire plate et goudronnée de la station au point (s, x).
+func _station_flat(s: float, x: float) -> float:
+	var site := _station_site_offset(s)
+	if site == INF or x < 8.0:
+		return 0.0
+	return smoothstep(STATION_SITE_HALF + 12.0, STATION_SITE_HALF, absf(site)) * smoothstep(56.0, 46.0, x)
 
 
 ## Hauteur du terrain par rapport à la route, à x mètres du centre.
@@ -75,7 +118,8 @@ func ground_height(s: float, x: float) -> float:
 		return lerpf(0.0, -1.0, (ax - 8.0) / 3.0)
 	var p := track.point_at(s) + track.right_at(s) * x
 	var relief := smoothstep(11.0, 80.0, ax) * 22.0
-	return -1.0 + (_noise.get_noise_2d(p.x, p.z) * 0.5 + 0.5) * relief
+	var h := -1.0 + (_noise.get_noise_2d(p.x, p.z) * 0.5 + 0.5) * relief
+	return lerpf(h, 0.0, _station_flat(s, x))
 
 
 # --- Construction ------------------------------------------------------------
@@ -92,6 +136,17 @@ func build_chunk(index: int) -> MeshInstance3D:
 	_build_rails(env, s0, s1)
 	_build_lamps(env, glow, s0, s1)
 	_build_trees(env, index, s0, s1)
+	var labels := []
+	for st in stations:
+		if st - STATION_SITE_BACK - STATION_SITE_HALF < s1 and st + 10.0 >= s0:
+			_build_station(env, glow, st, s0, s1)
+		if st >= s0 and st < s1:
+			labels.append(_build_gantry(env, glow, st, "STATION %d" % (stations.find(st) + 1)))
+		var sign_s := st - 1000.0
+		if sign_s >= s0 and sign_s < s1:
+			labels.append(_build_sign(env, sign_s, "STATION\n1 km"))
+	if arrival_s >= s0 and arrival_s < s1:
+		labels.append(_build_gantry(env, glow, arrival_s, "AUBE"))
 
 	var mesh := ArrayMesh.new()
 	for part in [[road, road_material], [env, env_material], [glow, glow_material]]:
@@ -104,7 +159,91 @@ func build_chunk(index: int) -> MeshInstance3D:
 	mi.mesh = mesh
 	mi.name = "Chunk%d" % index
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for l in labels:
+		mi.add_child(l)
 	return mi
+
+
+# --- Stations et portiques ---------------------------------------------------
+
+## Station-service à droite, juste avant le portique : auvent lumineux, pompes,
+## boutique, totem. Seules les pièces dont le pied tombe dans [s0, s1) sont
+## construites, pour ne rien dessiner deux fois d'un tronçon à l'autre.
+func _build_station(env: SurfaceTool, glow: SurfaceTool, st: float, s0: float, s1: float) -> void:
+	var c := st - STATION_SITE_BACK
+	var pieces := []
+	# Auvent : piliers, toit, sous-face lumineuse.
+	for ps in [c - 10.0, c + 10.0]:
+		for px in [15.0, 29.0]:
+			pieces.append(["box", ps, px, 0.0, Vector3(0.5, 5.6, 0.5), Color(0.75, 0.75, 0.78), 0.9])
+	pieces.append(["roof", c, 22.0])
+	# Pompes.
+	for ps in [c - 6.0, c, c + 6.0]:
+		pieces.append(["box", ps, 22.0, 0.0, Vector3(0.8, 1.6, 1.2), Color(0.8, 0.18, 0.12), 0.9])
+		pieces.append(["glow", ps, 21.55, 1.0, Vector3(0.05, 0.35, 0.6), STATION_LIGHT, 0.8])
+	# Boutique et sa vitrine.
+	pieces.append(["box", c + 4.0, 41.0, 0.0, Vector3(9.0, 4.0, 22.0), Color(0.55, 0.53, 0.5), 0.5])
+	pieces.append(["glow", c + 4.0, 36.45, 0.6, Vector3(0.05, 2.0, 16.0), Color(1.0, 0.85, 0.55), 0.9])
+	# Totem lumineux au bord de la route.
+	pieces.append(["box", c - 30.0, 11.5, 0.0, Vector3(0.4, 11.0, 0.4), Color(0.3, 0.3, 0.32), 0.4])
+	pieces.append(["glow", c - 30.0, 11.5, 11.0, Vector3(0.3, 2.6, 3.4), SIGN_COLOR, 1.0])
+	for p in pieces:
+		var ps: float = p[1]
+		if ps < s0 or ps >= s1:
+			continue
+		var yaw := track.yaw_at(ps)
+		match p[0]:
+			"box":
+				_box(env, _road_pos(ps, p[2], p[3]), yaw, p[4], p[5], p[6])
+			"glow":
+				_glow_box(glow, _road_pos(ps, p[2], p[3]), yaw, p[4], p[5], p[6])
+			"roof":
+				_box(env, _road_pos(ps, p[2], 5.6), yaw, Vector3(18.0, 0.8, 28.0), Color(0.9, 0.9, 0.92), 0.7)
+				# Bandeau orange sur la tranche de l'auvent, côté route.
+				_glow_box(glow, _road_pos(ps, 12.95, 5.65), yaw, Vector3(0.1, 0.7, 28.0), SIGN_COLOR, 0.9)
+				# Sous-face : un grand aplat lumineux tourné vers le bas.
+				_glow_box(glow, _road_pos(ps, 22.0, 5.55), yaw, Vector3(17.0, 0.02, 27.0), STATION_LIGHT, 0.55)
+
+
+## Portique au-dessus de la route (point de passage), avec son texte.
+func _build_gantry(env: SurfaceTool, glow: SurfaceTool, s: float, text: String) -> Label3D:
+	var yaw := track.yaw_at(s)
+	var metal := Color(0.35, 0.36, 0.4)
+	for side in [-1.0, 1.0]:
+		_box(env, _road_pos(s, 9.0 * side, 0.0), yaw, Vector3(0.6, 7.2, 0.6), metal, 0.8)
+	_box(env, _road_pos(s, 0.0, 6.4), yaw, Vector3(18.6, 1.6, 0.8), Color(0.08, 0.09, 0.12), 0.4)
+	# Rangée de feux en damier sous la poutre.
+	for i in 12:
+		var x := -8.25 + i * 1.5
+		var col := Color(1.0, 0.75, 0.25) if i % 2 == 0 else Color(1.0, 1.0, 0.95)
+		_glow_box(glow, _road_pos(s, x, 6.1) + track.forward_at(s) * -0.45, yaw, Vector3(0.6, 0.25, 0.05), col, 1.0)
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = 96
+	label.pixel_size = 0.012
+	label.outline_size = 0
+	label.modulate = Color(1.0, 0.86, 0.55)
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	label.transform = track.transform_at(s, 0.0, 7.2)
+	label.position += track.forward_at(s) * -0.45
+	return label
+
+
+## Panneau d'annonce sur le bas-côté droit.
+func _build_sign(env: SurfaceTool, s: float, text: String) -> Label3D:
+	var yaw := track.yaw_at(s)
+	_box(env, _road_pos(s, 10.0, 0.0), yaw, Vector3(0.2, 3.0, 0.2), Color(0.3, 0.3, 0.32), 0.3)
+	_box(env, _road_pos(s, 10.0, 3.0), yaw, Vector3(3.6, 2.0, 0.15), Color(0.1, 0.25, 0.55), 0.6)
+	var label := Label3D.new()
+	label.text = text
+	label.font_size = 64
+	label.pixel_size = 0.012
+	label.outline_size = 0
+	label.modulate = Color(0.95, 0.95, 1.0)
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	label.transform = track.transform_at(s, 10.0, 4.0)
+	label.position += track.forward_at(s) * -0.1
+	return label
 
 
 func _new_tool() -> SurfaceTool:
@@ -184,6 +323,12 @@ func _strip(st: SurfaceTool, sa: float, sb: float, xa: float, xb: float, ha: flo
 	var p := [_road_pos(sa, xa, haa), _road_pos(sb, xa, hab), _road_pos(sb, xb, hbb), _road_pos(sa, xb, hba)]
 	var l := [lamp_light(sa, xa), lamp_light(sb, xa), lamp_light(sb, xb), lamp_light(sa, xb)]
 	var c := [ca, ca, cb, cb]
+	if use_ground:
+		# Aire de la station : goudron clair au lieu de l'herbe.
+		var tarmac := Color(0.3, 0.3, 0.33)
+		var pts := [[sa, xa], [sb, xa], [sb, xb], [sa, xb]]
+		for i in 4:
+			c[i] = c[i].lerp(tarmac, _station_flat(pts[i][0], pts[i][1]))
 	if side < 0.0:
 		p = [p[0], p[3], p[2], p[1]]
 		l = [l[0], l[3], l[2], l[1]]
@@ -264,6 +409,8 @@ func _build_trees(st: SurfaceTool, index: int, s0: float, s1: float) -> void:
 			if rng.randf() < 0.55:
 				var x: float = side * rng.randf_range(12.0, 62.0)
 				var ts := s + rng.randf_range(0.0, 6.0)
+				if _station_flat(ts, x) > 0.0 or _station_flat(ts, x + 8.0) > 0.0:
+					continue
 				var h := rng.randf_range(6.0, 13.0)
 				var base := _road_pos(ts, x, ground_height(ts, x) - 0.5)
 				var shade := rng.randf_range(0.7, 1.2)

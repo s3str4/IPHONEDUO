@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1"]
 [ext_resource type="Script" path="res://scripts/car_view.gd" id="2"]
@@ -6,6 +6,8 @@
 [ext_resource type="Script" path="res://scripts/rain.gd" id="4"]
 [ext_resource type="Shader" path="res://shaders/night_sky.gdshader" id="5"]
 [ext_resource type="Shader" path="res://shaders/ps1_post.gdshader" id="6"]
+[ext_resource type="Script" path="res://scripts/traffic_view.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/hud.gd" id="8"]
 
 [sub_resource type="ShaderMaterial" id="sky_mat"]
 shader = ExtResource("5")
@@ -23,12 +25,6 @@ tonemap_mode = 0
 
 [sub_resource type="ShaderMaterial" id="post_mat"]
 shader = ExtResource("6")
-
-[sub_resource type="LabelSettings" id="big"]
-font_size = 22
-outline_size = 4
-outline_color = Color(0, 0, 0, 1)
-font_color = Color(1, 0.86, 0.55, 1)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1")
@@ -67,29 +63,8 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 mouse_filter = 2
 
+[node name="Traffic" type="Node3D" parent="."]
+script = ExtResource("7")
+
 [node name="Hud" type="CanvasLayer" parent="."]
-layer = 2
-
-[node name="Speed" type="Label" parent="Hud"]
-anchors_preset = 7
-anchor_left = 0.5
-anchor_top = 1.0
-anchor_right = 0.5
-anchor_bottom = 1.0
-offset_left = -80.0
-offset_top = -52.0
-offset_right = 80.0
-offset_bottom = -20.0
-grow_horizontal = 2
-grow_vertical = 0
-text = "0 km/h"
-label_settings = SubResource("big")
-horizontal_alignment = 1
-
-[node name="Distance" type="Label" parent="Hud"]
-offset_left = 10.0
-offset_top = 8.0
-offset_right = 140.0
-offset_bottom = 30.0
-text = "0.0 km"
-mouse_filter = 2
+script = ExtResource("8")

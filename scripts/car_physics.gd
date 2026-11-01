@@ -22,6 +22,7 @@ const SHOULDER_DRAG := 18.0      # m/s² de freinage sur l'accotement
 const RAIL_SPEED_LOSS := 0.82    # vitesse gardée à chaque choc contre la glissière
 const RAIL_SCRAPE_DRAG := 12.0   # m/s² en frottant contre la glissière
 const CAR_HALF_WIDTH := 0.9
+const CAR_LENGTH := 4.4
 
 var s := 0.0
 var x := 0.0
@@ -94,5 +95,5 @@ func autopilot_steer(track: Track, target_x: float) -> float:
 	if steer_speed <= 0.0:
 		return 0.0
 	var push := track.curvature_at(s + speed * 0.3) * speed * speed * CENTRIFUGAL
-	var wanted := push + (target_x - x) * 1.2
+	var wanted := push + (target_x - x) * 2.5
 	return clampf(wanted / steer_speed, -1.0, 1.0)
