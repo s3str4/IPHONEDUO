@@ -19,11 +19,11 @@ func _ready() -> void:
 	initial_velocity_min = 26.0
 	initial_velocity_max = 32.0
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.035, 1.1)
+	quad.size = Vector2(0.025, 1.0)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(0.62, 0.68, 0.85, 0.42)
+	mat.albedo_color = Color(0.62, 0.68, 0.85, 0.36)
 	mat.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	mat.billboard_keep_scale = true
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST

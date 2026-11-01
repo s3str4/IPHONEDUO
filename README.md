@@ -29,7 +29,8 @@ multiplicateur de score ; un choc le remet à ×1.
 
 Options (Projet > Paramètres > Exécution, ou en ligne de commande après `--`) :
 `--seed=N` (autre route et autre trafic), `--autopilot` (la voiture roule seule),
-`--start_s=M` (démarre à M mètres, ex. 20000 pour voir l'aube).
+`--start_s=M` (démarre à M mètres, ex. 20000 pour voir l'aube),
+`--showcase` (écran de titre sans interface, pour regarder la voiture).
 
 ## Tests
 
@@ -62,6 +63,9 @@ godot --headless --path . --script res://tools/balance.gd
 | `scripts/traffic_view.gd`, `scripts/vehicle_mesh.gd` | Véhicules à l'écran |
 | `scripts/hud.gd` | Interface, écrans de titre et de fin |
 | `scripts/main.gd` | Assemblage, caméra, aube, tronçons à la volée |
-| `shaders/` | Look PS1 (repris de YTSLEEP), ciel, lumières additives |
+| `scripts/halo.gd` | Halos lumineux face caméra |
+| `shaders/` | Look PS1 (repris de YTSLEEP), ciel de nuit, halos, gouttes à l'écran |
+| `assets/fonts/` | Polices pixel libres (OFL, voir LICENSE.txt) |
 | `tests/` | Banc d'essai headless et simulation de parties |
 | `tools/balance.gd` | Rapport d'équilibrage |
+| `tools/shot.sh` | Capture d'écran : `tools/shot.sh sortie.png 6 --autopilot --start_s=20000` |

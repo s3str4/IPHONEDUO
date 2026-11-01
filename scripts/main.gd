@@ -5,6 +5,7 @@ extends Node3D
 ##   --seed=N           graine de la route et du trafic
 ##   --autopilot        la voiture se conduit seule (captures, démos)
 ##   --start_s=M        démarre à M mètres (captures de l'aube, des stations)
+##   --showcase         écran de titre sans interface (captures de la voiture)
 ##   --capture=PATH     enregistre une image PNG puis quitte
 ##   --capture_at=SEC   instant de la capture (défaut 6)
 
@@ -32,6 +33,16 @@ var traffic: Traffic
 var game := GameRun.new()
 
 var _chunks := {}
+## Construction des tronçons en tâche de fond (35 ms chacun : trop pour une
+## image). Le fil a son propre tracé : même graine, donc même route, et rien
+## n'est partagé avec la boucle de jeu.
+var _worker_builder: RoadBuilder
+var _building := -1
+var _build_task_id := -1
+## Tronçon construit par la tâche, pas encore récupéré par la boucle de jeu.
+var _pending: MeshInstance3D
+## Images où un tronçon visible manquait encore (rapporté à la capture).
+var _late_frames := 0
 var _args := {}
 var _time := 0.0
 var _shake := 0.0
@@ -57,31 +68,55 @@ func _ready() -> void:
 	builder = RoadBuilder.new(track, seed)
 	builder.stations = RunConfig.stations()
 	builder.arrival_s = RunConfig.arrival_s()
+	_worker_builder = RoadBuilder.new(Track.new(seed), seed)
+	_worker_builder.stations = builder.stations
+	_worker_builder.arrival_s = builder.arrival_s
+	# Ressources partagées créées ici, avant toute tâche de fond.
+	Hud.arcade_font()
+	Halo.material()
 	traffic = Traffic.new(seed)
 	_sky_material = environment.sky.sky_material
 	_best = _load_best()
 
 	game.station_reached.connect(_on_station)
-	game.near_miss.connect(func(pts: int) -> void: hud.popup("FRÔLÉ  +%d" % pts, Hud.WHITE, 13, 210.0))
-	game.chain_broken.connect(func() -> void: hud.popup("CHAÎNE PERDUE", Hud.RED, 11, 236.0))
+	game.near_miss.connect(func(pts: int) -> void: hud.popup("FRÔLÉ +%d" % pts, Hud.WHITE, 8, 210.0))
+	game.chain_broken.connect(func() -> void: hud.popup("CHAÎNE PERDUE", Hud.RED, 8, 232.0))
 	game.arrived.connect(_on_arrived)
 	game.time_up.connect(_on_time_up)
 
-	# Départ un peu après le début de la route : la caméra, derrière, doit
-	# avoir de la route sous elle.
-	car.s = START_S
+	# Départ sous le premier lampadaire allumé (la caméra, derrière, doit aussi
+	# avoir de la route sous elle) : la voiture est mise en valeur au titre.
+	car.s = _first_lamp_after(START_S)
 	if _args.has("start_s"):
 		car.s = float(_args["start_s"])
 		track.ensure(car.s + 800.0)
 		track.trim(car.s - 300.0)
-	if _args.has("autopilot") or _args.has("start_s") or quick_restart:
+	if _args.has("showcase"):
+		hud.visible = false
+	elif _args.has("autopilot") or _args.has("start_s") or quick_restart:
 		_start()
 	else:
-		hud.show_overlay("ROUTE DE NUIT",
-				"Une nuit, une route.\nAtteins l'aube avant la fin du chrono.\n\nMeilleur score : %s" % Hud._group(_best),
-				"pose ton pouce pour démarrer")
-	_update_chunks()
+		hud.show_overlay("",
+				"Une nuit. Une route.\nAtteins l'aube\navant la fin du chrono.\n\nRECORD %s" % Hud._group(_best),
+				"POSE TON POUCE", true)
+	_update_chunks(true)
 	_place_car_and_camera(0.0)
+
+
+func _exit_tree() -> void:
+	if _building != -1:
+		WorkerThreadPool.wait_for_task_completion(_build_task_id)
+		_building = -1
+	if _pending != null:
+		_pending.free()
+		_pending = null
+
+
+func _first_lamp_after(s: float) -> float:
+	var k := int(ceil(s / RoadBuilder.LAMP_SPACING))
+	while builder.lamp_side(k) == 0:
+		k += 1
+	return k * RoadBuilder.LAMP_SPACING + 2.0
 
 
 func _start() -> void:
@@ -136,9 +171,15 @@ func _process(delta: float) -> void:
 	_place_car_and_camera(delta)
 	traffic_view.sync(traffic, track)
 	car_view.set_lighting(builder.lamp_light(car.s, car.x), input.throttle == 0.0 and not _args.has("autopilot"), delta)
-	hud.set_values(game.time_left, game.score, game.segment(), game.multiplier(), car.speed_kmh())
+	hud.set_values(game.time_left, game.score, game.segment(), game.multiplier(), car.speed_kmh(), game.progress())
 	_update_dawn()
+	var cur := int(floor(car.s / RoadBuilder.CHUNK_LENGTH))
+	for i in range(cur, cur + 3):
+		if not _chunks.has(i):
+			_late_frames += 1
+			break
 	if _args.has("capture") and _time >= float(_args.get("capture_at", "6")):
+		print("tronçons en retard : %d images" % _late_frames)
 		get_viewport().get_texture().get_image().save_png(_args["capture"])
 		get_tree().quit()
 
@@ -155,28 +196,28 @@ func _update_dawn() -> void:
 
 
 func _on_station(index: int, added: float) -> void:
-	hud.popup("+%d s" % int(added), Hud.AMBER, 30, 150.0)
-	hud.popup("STATION %d" % (index + 1), Hud.WHITE, 12, 196.0)
+	hud.popup("+%d" % int(added), Hud.AMBER, 32, 140.0)
+	hud.popup("STATION %d" % (index + 1), Hud.WHITE, 8, 188.0)
 
 
 func _on_arrived(bonus: int) -> void:
 	_end_time = _time
 	var record := _save_best(int(game.score))
 	hud.show_overlay("L'AUBE",
-			"%s\n\nBonus de temps : %s\nFrôlages : %d   Chocs : %d\n\nSCORE  %s\n%s" % [
+			"%s\n\nBONUS TEMPS %s\nFRÔLAGES    %d\nCHOCS       %d\n\nSCORE %s\n\n%s" % [
 				RunConfig.DESTINATION.to_upper(), Hud._group(bonus), game.near_misses, game.crashes,
-				Hud._group(int(game.score)), "NOUVEAU RECORD !" if record else "Record : %s" % Hud._group(_best)],
-			"touche pour rejouer")
+				Hud._group(int(game.score)), "NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(_best)],
+			"TOUCHE POUR REJOUER")
 
 
 func _on_time_up() -> void:
 	_end_time = _time
 	var record := _save_best(int(game.score))
-	hud.show_overlay("LA NUIT GAGNE",
-			"Étape %d sur %d\n%.1f km parcourus\n\nSCORE  %s\n%s" % [
+	hud.show_overlay("LA NUIT\nGAGNE",
+			"\nÉTAPE %d SUR %d\n%.1f KM\n\nSCORE %s\n\n%s" % [
 				game.segment() + 1, RunConfig.SEGMENT_COUNT, car.s / 1000.0, Hud._group(int(game.score)),
-				"NOUVEAU RECORD !" if record else "Record : %s" % Hud._group(_best)],
-			"touche pour rejouer")
+				"NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(_best)],
+			"TOUCHE POUR REJOUER")
 
 
 func _load_best() -> int:
@@ -198,19 +239,50 @@ func _save_best(score: int) -> bool:
 	return true
 
 
-func _update_chunks() -> void:
+## Tient les tronçons autour de la voiture. `blocking` : tout construire tout
+## de suite (au démarrage) ; sinon un tronçon à la fois, en tâche de fond, le
+## plus proche d'abord.
+func _update_chunks(blocking := false) -> void:
 	var current := int(floor(car.s / RoadBuilder.CHUNK_LENGTH))
 	var wanted := {}
+	var missing := -1
 	for i in range(maxi(0, current - CHUNKS_BEHIND), current + CHUNKS_AHEAD + 1):
 		wanted[i] = true
-		if not _chunks.has(i):
-			var chunk := builder.build_chunk(i)
-			$Road.add_child(chunk)
-			_chunks[i] = chunk
+		if not _chunks.has(i) and missing == -1:
+			missing = i
+		if blocking and not _chunks.has(i):
+			_add_chunk(i, _worker_builder.build_chunk(i))
+	if not blocking and missing != -1 and _building == -1:
+		_building = missing
+		_build_task_id = WorkerThreadPool.add_task(_build_in_background.bind(missing))
 	for i in _chunks.keys():
 		if not wanted.has(i):
 			_chunks[i].queue_free()
 			_chunks.erase(i)
+
+
+func _build_in_background(index: int) -> void:
+	_pending = _worker_builder.build_chunk(index)
+	_worker_builder.track.trim((index - 2) * RoadBuilder.CHUNK_LENGTH)
+	_on_chunk_built.call_deferred(index)
+
+
+func _on_chunk_built(index: int) -> void:
+	if _building == -1:
+		return
+	WorkerThreadPool.wait_for_task_completion(_build_task_id)
+	_building = -1
+	var mi := _pending
+	_pending = null
+	if _chunks.has(index) or absf(index * RoadBuilder.CHUNK_LENGTH - car.s) > 800.0:
+		mi.free()
+		return
+	_add_chunk(index, mi)
+
+
+func _add_chunk(index: int, mi: MeshInstance3D) -> void:
+	$Road.add_child(mi)
+	_chunks[index] = mi
 
 
 func _place_car_and_camera(delta: float) -> void:
@@ -218,6 +290,14 @@ func _place_car_and_camera(delta: float) -> void:
 	car_view.transform = t
 	car_view.rotate_object_local(Vector3.UP, -car.slip)
 	car_view.rotate_object_local(Vector3.BACK, car.slip * 0.15)
+
+	if game.state == GameRun.State.WAITING:
+		# Écran de titre : la caméra tourne lentement autour de la voiture arrêtée.
+		var a := _time * 0.25 + 2.2
+		var orbit := t.origin + t.basis * Vector3(sin(a) * 6.5, 1.7, cos(a) * 6.5)
+		camera.look_at_from_position(orbit, t.origin + t.basis.y * 0.8, Vector3.UP)
+		camera.fov = 62.0
+		return
 
 	# Caméra derrière la voiture, qui suit à moitié ses écarts latéraux.
 	var k := 1.0 - exp(-5.0 * delta) if delta > 0.0 else 1.0

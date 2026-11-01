@@ -15,9 +15,12 @@ uniform float affine_strength : hint_range(0.0, 1.0) = 1.0;
 uniform float baked_light = 1.0;
 // Couleur de la lumière précalculée (sodium des lampadaires), surexposée.
 uniform vec3 baked_tint = vec3(2.4, 1.55, 0.85);
+// Route mouillée : reflet du ciel (couleur du brouillard) en incidence rasante.
+uniform float wet_sheen = 0.0;
 
 varying vec3 affine_uv;
 varying float fog_f;
+varying float sheen;
 
 void vertex() {
 	vec4 view = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
@@ -25,6 +28,10 @@ void vertex() {
 	POSITION = clip;
 	affine_uv = vec3(UV * uv_scale * clip.w, clip.w);
 	fog_f = ps1_fog_factor(-view.z);
+	// Fresnel par sommet (PS1) : plus on regarde loin, plus la route brille.
+	vec3 n_view = normalize((MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	float facing = abs(dot(n_view, normalize(-view.xyz)));
+	sheen = pow(1.0 - facing, 4.0) * wet_sheen;
 }
 
 void fragment() {
@@ -35,5 +42,6 @@ void fragment() {
 	// COLOR.rgb : teinte de surface ; COLOR.a : lumière précalculée (0..1).
 	vec3 base = tex * COLOR.rgb;
 	ALBEDO = base * (1.0 - fog_f);
-	EMISSION = base * COLOR.a * baked_light * baked_tint * (1.0 - fog_f) + ps1_fog_color.rgb * fog_f;
+	EMISSION = base * COLOR.a * baked_light * baked_tint * (1.0 - fog_f) + ps1_fog_color.rgb * fog_f
+			+ ps1_fog_color.rgb * sheen * (1.0 - fog_f);
 }

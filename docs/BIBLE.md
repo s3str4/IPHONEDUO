@@ -198,7 +198,25 @@ stations. Tout synthétisé par code.
     pilote bridé à 215 km/h ou qui ignore le trafic n'arrive jamais.
   - **Règle anti-mur** : le trafic ne ferme jamais les 3 voies devant le
     joueur (testé, avec un témoin qui prouve que le détecteur voit un mur).
-  - **Reste à faire** : la beauté (M1.5), la sensation au pouce sur iPhone.
+  - **Reste à faire** : la sensation au pouce sur iPhone.
+- **M1.5 (passe visuelle) : livré.**
+  - Voiture : sportive « coin de fromage » années 80 (ouïes latérales, phares
+    escamotables, bandeau de feux arrière), ombrage figé par face sur tous les
+    véhicules.
+  - Ciel : étoiles qui scintillent, lune et son halo, nuages qui dérivent,
+    éclairés par la ville et rosis par l'aube, deux chaînes de montagnes, ville
+    illuminée à l'horizon.
+  - Lumière : halos face caméra (lampadaires, feux, totem, portiques, pylônes),
+    reflet du ciel sur la route mouillée, gouttes sur l'écran, vignette.
+  - Décors : ligne haute tension (pylônes, câbles, feu rouge), ponts éclairés,
+    panneaux publicitaires lumineux qui glissent des indices de l'histoire.
+  - Interface : polices pixel libres (Press Start 2P, Pixelify Sans, OFL),
+    bandeaux en dégradé, jauge des étapes de la nuit à l'aube, compteur
+    segmenté, logo du titre, caméra qui tourne autour de la voiture au titre.
+  - Performance : les tronçons (35 ms chacun) se construisent en tâche de
+    fond ; aucune image sans route devant la voiture sur une minute à fond.
+  - Reste pour plus tard : bruitages et musique (M3), vraie mesure de
+    performance sur iPhone (M4).
 
 ## 13. Rôles
 

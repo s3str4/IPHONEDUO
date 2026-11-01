@@ -19,6 +19,20 @@ const STATION_SITE_BACK := 22.0   # la station est juste avant le portique
 const STATION_SITE_HALF := 34.0   # demi-longueur de l'aire de la station
 const STATION_LIGHT := Color(0.85, 0.95, 1.0)
 const SIGN_COLOR := Color(1.0, 0.45, 0.12)
+const PYLON_SPACING := 150.0
+const PYLON_X := -36.0
+const PYLON_HEIGHT := 26.0
+const BILLBOARD_SPACING := 900.0
+const BRIDGE_SPACING := 1700.0
+## Panneaux publicitaires : quelques indices pour l'histoire (M2).
+const BILLBOARDS := [
+	["MOTEL DE L'AUBE\n12 km", Color(0.9, 0.2, 0.35)],
+	["RADIO NUIT\n98.4 FM", Color(0.2, 0.5, 0.95)],
+	["CAFÉ\n24 H / 24", Color(0.95, 0.6, 0.15)],
+	["VOUS N'ÊTES\nPAS SEUL", Color(0.25, 0.8, 0.6)],
+	["LA MER\n> 40 km", Color(0.3, 0.75, 0.95)],
+	["ELLE VOUS\nATTEND", Color(0.85, 0.3, 0.9)],
+]
 
 var track: Track
 ## Positions (s) des stations-service et de l'arrivée (portiques).
@@ -29,6 +43,8 @@ var env_material: ShaderMaterial
 var glow_material: ShaderMaterial
 
 var _seed := 1
+## Halos du tronçon en cours de construction.
+var _halo: SurfaceTool
 var _noise := FastNoiseLite.new()
 
 
@@ -43,6 +59,7 @@ func _init(p_track: Track, seed: int = 1) -> void:
 	road_material.shader = lit
 	road_material.set_shader_parameter("albedo_tex", make_road_texture())
 	road_material.set_shader_parameter("affine_strength", 0.3)
+	road_material.set_shader_parameter("wet_sheen", 2.2)
 	env_material = ShaderMaterial.new()
 	env_material.shader = lit
 	env_material.set_shader_parameter("affine_strength", 0.0)
@@ -117,7 +134,7 @@ func ground_height(s: float, x: float) -> float:
 	if ax <= 11.0:
 		return lerpf(0.0, -1.0, (ax - 8.0) / 3.0)
 	var p := track.point_at(s) + track.right_at(s) * x
-	var relief := smoothstep(11.0, 80.0, ax) * 22.0
+	var relief := smoothstep(11.0, 80.0, ax) * 12.0
 	var h := -1.0 + (_noise.get_noise_2d(p.x, p.z) * 0.5 + 0.5) * relief
 	return lerpf(h, 0.0, _station_flat(s, x))
 
@@ -131,6 +148,7 @@ func build_chunk(index: int) -> MeshInstance3D:
 	var road := _new_tool()
 	var env := _new_tool()
 	var glow := _new_tool()
+	_halo = _new_tool()
 	_build_road(road, s0, s1)
 	_build_shoulders_and_ground(env, s0, s1)
 	_build_rails(env, s0, s1)
@@ -147,9 +165,16 @@ func build_chunk(index: int) -> MeshInstance3D:
 			labels.append(_build_sign(env, sign_s, "STATION\n1 km"))
 	if arrival_s >= s0 and arrival_s < s1:
 		labels.append(_build_gantry(env, glow, arrival_s, "AUBE"))
+	_build_pylons(env, s0, s1)
+	for bs in _every(BILLBOARD_SPACING, 330.0, s0, s1):
+		if not _near_checkpoint(bs, 160.0):
+			labels.append(_build_billboard(env, glow, bs, int(bs / BILLBOARD_SPACING)))
+	for br in _every(BRIDGE_SPACING, 620.0, s0, s1):
+		if not _near_checkpoint(br, 200.0):
+			_build_bridge(env, glow, br)
 
 	var mesh := ArrayMesh.new()
-	for part in [[road, road_material], [env, env_material], [glow, glow_material]]:
+	for part in [[road, road_material], [env, env_material], [glow, glow_material], [_halo, Halo.material()]]:
 		var arrays: Array = part[0].commit_to_arrays()
 		if arrays[Mesh.ARRAY_VERTEX] == null or arrays[Mesh.ARRAY_VERTEX].is_empty():
 			continue
@@ -162,6 +187,108 @@ func build_chunk(index: int) -> MeshInstance3D:
 	for l in labels:
 		mi.add_child(l)
 	return mi
+
+
+# --- Décors : pylônes, panneaux, ponts ------------------------------------------
+
+## Positions k·spacing + offset comprises dans [s0, s1).
+func _every(spacing: float, offset: float, s0: float, s1: float) -> Array:
+	var out := []
+	var k := int(ceil((s0 - offset) / spacing))
+	while k * spacing + offset < s1:
+		out.append(k * spacing + offset)
+		k += 1
+	return out
+
+
+func _near_checkpoint(s: float, margin: float) -> bool:
+	for st in stations:
+		if absf(s - st) < margin + STATION_SITE_HALF:
+			return true
+	return arrival_s > 0.0 and absf(s - arrival_s) < margin
+
+
+## Ligne haute tension sur la gauche : pylônes, câbles, feu rouge au sommet.
+func _build_pylons(env: SurfaceTool, s0: float, s1: float) -> void:
+	var steel := Color(0.16, 0.17, 0.2)
+	var k0 := int(ceil(s0 / PYLON_SPACING))
+	var k1 := int(floor((s1 - 0.001) / PYLON_SPACING))
+	for k in range(k0, k1 + 1):
+		var s := k * PYLON_SPACING
+		var yaw := track.yaw_at(s)
+		var g := ground_height(s, PYLON_X)
+		var base := _road_pos(s, PYLON_X, g)
+		# Fût en treillis simplifié : 3 tronçons de plus en plus fins.
+		var widths := [2.6, 1.6, 0.8]
+		for i in 3:
+			var h0 := PYLON_HEIGHT * i / 3.0
+			_box(env, base + Vector3.UP * h0, yaw, Vector3(widths[i], PYLON_HEIGHT / 3.0, widths[i]), steel, 0.05)
+		# Consoles.
+		for arm_h in [PYLON_HEIGHT * 0.62, PYLON_HEIGHT * 0.86]:
+			_box(env, base + Vector3.UP * arm_h, yaw, Vector3(9.0, 0.35, 0.35), steel, 0.05)
+		Halo.add(_halo, base + Vector3.UP * (PYLON_HEIGHT + 0.6), 1.4, Color(1.0, 0.1, 0.05), 0.6)
+		# Câbles jusqu'au pylône suivant, avec un peu de flèche.
+		var s_next := s + PYLON_SPACING
+		track.ensure(s_next + 1.0)
+		var next_base := _road_pos(s_next, PYLON_X, ground_height(s_next, PYLON_X))
+		for arm_h in [PYLON_HEIGHT * 0.62, PYLON_HEIGHT * 0.86]:
+			for off in [-4.2, 4.2]:
+				var segs := 6
+				for j in segs:
+					var ta := float(j) / segs
+					var tb := float(j + 1) / segs
+					var pa := _cable_point(base, next_base, s, s_next, off, arm_h, ta)
+					var pb := _cable_point(base, next_base, s, s_next, off, arm_h, tb)
+					_quad(env, [pa, pb, pb + Vector3.UP * 0.07, pa + Vector3.UP * 0.07],
+							[steel, steel, steel, steel], [0.0, 0.0, 0.0, 0.0])
+
+
+func _cable_point(a: Vector3, b: Vector3, sa: float, sb: float, off: float, h: float, t: float) -> Vector3:
+	var p := a.lerp(b, t) + track.right_at(lerpf(sa, sb, t)) * off
+	p.y += h - sin(t * PI) * 2.5
+	return p
+
+
+## Panneau publicitaire éclairé sur la droite.
+func _build_billboard(env: SurfaceTool, glow: SurfaceTool, s: float, k: int) -> Label3D:
+	var entry: Array = BILLBOARDS[posmod(k, BILLBOARDS.size())]
+	var color: Color = entry[1]
+	var yaw := track.yaw_at(s)
+	var x := 15.0
+	var g := ground_height(s, x)
+	for px in [x - 2.5, x + 2.5]:
+		_box(env, _road_pos(s, px, g), yaw, Vector3(0.3, 6.0 - g, 0.3), Color(0.2, 0.2, 0.22), 0.2)
+	# Panneau : fond coloré lumineux, cadre sombre.
+	_box(env, _road_pos(s, x, 5.6), yaw, Vector3(8.4, 4.4, 0.25), Color(0.05, 0.05, 0.06), 0.1)
+	_glow_box(glow, _road_pos(s, x, 5.8) + track.forward_at(s) * -0.14, yaw, Vector3(7.8, 3.8, 0.02), color, 0.55)
+	Halo.add(_halo, _road_pos(s, x, 8.0) + track.forward_at(s) * -0.8, 5.5, color, 0.22)
+	var label := Label3D.new()
+	label.text = entry[0]
+	label.font = Hud.text_font(true)
+	label.font_size = 96
+	label.pixel_size = 0.016
+	label.modulate = Color(1.0, 1.0, 0.95)
+	label.outline_size = 12
+	label.outline_modulate = Color(0, 0, 0, 0.6)
+	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	label.transform = track.transform_at(s, x, 7.7)
+	label.position += track.forward_at(s) * -0.3
+	return label
+
+
+## Pont qui enjambe l'autoroute, avec ses lampadaires.
+func _build_bridge(env: SurfaceTool, glow: SurfaceTool, s: float) -> void:
+	var yaw := track.yaw_at(s)
+	var concrete := Color(0.42, 0.41, 0.4)
+	for side in [-1.0, 1.0]:
+		_box(env, _road_pos(s, 10.5 * side, -1.0), yaw, Vector3(1.6, 8.0, 3.0), concrete, 0.25)
+	# Tablier : très large pour enjamber aussi les bas-côtés.
+	_box(env, _road_pos(s, 0.0, 7.0), yaw, Vector3(60.0, 1.4, 9.0), concrete, 0.2)
+	_box(env, _road_pos(s, 0.0, 8.4), yaw, Vector3(60.0, 0.9, 0.3), concrete * 0.8, 0.2)
+	# Lampes sous le tablier : on passe dans une bulle de lumière.
+	for x in [-4.0, 0.0, 4.0]:
+		_glow_box(glow, _road_pos(s, x, 6.9), yaw, Vector3(1.2, 0.05, 0.4), Color(0.85, 0.95, 1.0), 0.9)
+		Halo.add(_halo, _road_pos(s, x, 6.7) + track.forward_at(s) * 4.6, 1.6, Color(0.85, 0.95, 1.0), 0.4)
 
 
 # --- Stations et portiques ---------------------------------------------------
@@ -187,6 +314,9 @@ func _build_station(env: SurfaceTool, glow: SurfaceTool, st: float, s0: float, s
 	# Totem lumineux au bord de la route.
 	pieces.append(["box", c - 30.0, 11.5, 0.0, Vector3(0.4, 11.0, 0.4), Color(0.3, 0.3, 0.32), 0.4])
 	pieces.append(["glow", c - 30.0, 11.5, 11.0, Vector3(0.3, 2.6, 3.4), SIGN_COLOR, 1.0])
+	pieces.append(["halo", c - 30.0, 11.5, 12.3, 5.0, SIGN_COLOR, 0.45])
+	for ps in [c - 9.0, c, c + 9.0]:
+		pieces.append(["halo", ps, 22.0, 5.2, 4.0, STATION_LIGHT, 0.3])
 	for p in pieces:
 		var ps: float = p[1]
 		if ps < s0 or ps >= s1:
@@ -197,6 +327,8 @@ func _build_station(env: SurfaceTool, glow: SurfaceTool, st: float, s0: float, s
 				_box(env, _road_pos(ps, p[2], p[3]), yaw, p[4], p[5], p[6])
 			"glow":
 				_glow_box(glow, _road_pos(ps, p[2], p[3]), yaw, p[4], p[5], p[6])
+			"halo":
+				Halo.add(_halo, _road_pos(ps, p[2], p[3]), p[4], p[5], p[6])
 			"roof":
 				_box(env, _road_pos(ps, p[2], 5.6), yaw, Vector3(18.0, 0.8, 28.0), Color(0.9, 0.9, 0.92), 0.7)
 				# Bandeau orange sur la tranche de l'auvent, côté route.
@@ -217,10 +349,12 @@ func _build_gantry(env: SurfaceTool, glow: SurfaceTool, s: float, text: String) 
 		var x := -8.25 + i * 1.5
 		var col := Color(1.0, 0.75, 0.25) if i % 2 == 0 else Color(1.0, 1.0, 0.95)
 		_glow_box(glow, _road_pos(s, x, 6.1) + track.forward_at(s) * -0.45, yaw, Vector3(0.6, 0.25, 0.05), col, 1.0)
+		Halo.add(_halo, _road_pos(s, x, 6.2) + track.forward_at(s) * -0.6, 1.1, col, 0.45)
 	var label := Label3D.new()
 	label.text = text
-	label.font_size = 96
-	label.pixel_size = 0.012
+	label.font = Hud.arcade_font()
+	label.font_size = 64
+	label.pixel_size = 0.016
 	label.outline_size = 0
 	label.modulate = Color(1.0, 0.86, 0.55)
 	label.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
@@ -236,6 +370,7 @@ func _build_sign(env: SurfaceTool, s: float, text: String) -> Label3D:
 	_box(env, _road_pos(s, 10.0, 3.0), yaw, Vector3(3.6, 2.0, 0.15), Color(0.1, 0.25, 0.55), 0.6)
 	var label := Label3D.new()
 	label.text = text
+	label.font = Hud.text_font(true)
 	label.font_size = 64
 	label.pixel_size = 0.012
 	label.outline_size = 0
@@ -378,6 +513,7 @@ func _build_lamps(env: SurfaceTool, glow: SurfaceTool, s0: float, s1: float) -> 
 			continue
 		# Ampoule.
 		_glow_box(glow, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.45), yaw, Vector3(0.9, 0.25, 0.5), LAMP_COLOR, 1.0)
+		Halo.add(_halo, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.4), 2.6, LAMP_COLOR, 0.5)
 		# Reflet sur la route mouillée, étiré vers la caméra (derrière, s plus petit).
 		_reflection(glow, s, LAMP_POOL_X * side * 0.9, 18.0, 1.6, LAMP_COLOR, 0.55)
 

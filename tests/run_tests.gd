@@ -137,6 +137,12 @@ func _test_chunks_are_valid() -> void:
 	_check(labels.size() == 1 and labels[0].text == "STATION 1", "station : portique et son texte", str(labels.size()))
 	chunk.free()
 	_check(is_zero_approx(sb.ground_height(st - RoadBuilder.STATION_SITE_BACK, 30.0)), "station : aire plate")
+	# Chaque décor périodique tombe dans exactement un tronçon.
+	var found := 0
+	for i in 30:
+		var s0 := i * RoadBuilder.CHUNK_LENGTH
+		found += sb._every(RoadBuilder.BILLBOARD_SPACING, 330.0, s0, s0 + RoadBuilder.CHUNK_LENGTH).size()
+	_check(found == 3, "décors : un panneau tous les 900 m, ni oublié ni doublé", "%d sur 3 km" % found)
 	_check(sb.lamp_light(st - RoadBuilder.STATION_SITE_BACK, 4.0) > 0.6, "station : la route est éclairée devant la station")
 	# Les lampadaires éclairent la route, pas partout.
 	var lit := 0

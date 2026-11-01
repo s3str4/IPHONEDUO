@@ -16,6 +16,9 @@ const HEAD_COLOR := Color(1.0, 0.92, 0.7)
 const HALF_LENGTH := {Kind.SPORT: 2.2, Kind.SEDAN: 2.3, Kind.TRUCK: 6.2}
 const HALF_WIDTH := {Kind.SPORT: 0.95, Kind.SEDAN: 0.95, Kind.TRUCK: 1.25}
 
+## Halos du véhicule en cours de construction.
+static var _halo: SurfaceTool
+
 
 ## Construit le maillage d'un véhicule. `beam` : faisceau des phares au sol.
 static func build(kind: Kind, color: Color, body_material: Material, glow_material: Material,
@@ -24,6 +27,8 @@ static func build(kind: Kind, color: Color, body_material: Material, glow_materi
 	body.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var glow := SurfaceTool.new()
 	glow.begin(Mesh.PRIMITIVE_TRIANGLES)
+	_halo = SurfaceTool.new()
+	_halo.begin(Mesh.PRIMITIVE_TRIANGLES)
 	match kind:
 		Kind.SPORT:
 			_sport(body, glow, color)
@@ -38,27 +43,40 @@ static func build(kind: Kind, color: Color, body_material: Material, glow_materi
 	mesh.surface_set_material(0, body_material)
 	glow.commit(mesh)
 	mesh.surface_set_material(1, glow_material)
+	_halo.commit(mesh)
+	mesh.surface_set_material(2, Halo.material())
 	return mesh
 
 
 static func _sport(body: SurfaceTool, glow: SurfaceTool, color: Color) -> void:
-	# Caisse basse, nez plongeant.
+	# Coin de fromage années 80 : nez bas et effilé, arrière large et haut.
 	_prism(body, [
-		Vector3(-0.95, 0.25, -2.2), Vector3(0.95, 0.25, -2.2), Vector3(0.95, 0.25, 2.2), Vector3(-0.95, 0.25, 2.2),
-		Vector3(-0.92, 0.58, -2.15), Vector3(0.92, 0.58, -2.15), Vector3(0.95, 0.8, 2.2), Vector3(-0.95, 0.8, 2.2)],
+		Vector3(-0.86, 0.3, -2.25), Vector3(0.86, 0.3, -2.25), Vector3(0.99, 0.3, 2.3), Vector3(-0.99, 0.3, 2.3),
+		Vector3(-0.84, 0.58, -2.2), Vector3(0.84, 0.58, -2.2), Vector3(0.99, 0.9, 2.3), Vector3(-0.99, 0.9, 2.3)],
 		color)
-	# Habitacle.
+	# Habitacle : pare-brise très incliné, lunette arrière courte.
 	_prism(body, [
-		Vector3(-0.85, 0.7, -0.7), Vector3(0.85, 0.7, -0.7), Vector3(0.85, 0.78, 1.3), Vector3(-0.85, 0.78, 1.3),
-		Vector3(-0.62, 1.18, -0.05), Vector3(0.62, 1.18, -0.05), Vector3(0.66, 1.16, 0.95), Vector3(-0.66, 1.16, 0.95)],
+		Vector3(-0.86, 0.72, -0.6), Vector3(0.86, 0.72, -0.6), Vector3(0.9, 0.86, 1.25), Vector3(-0.9, 0.86, 1.25),
+		Vector3(-0.6, 1.17, 0.05), Vector3(0.6, 1.17, 0.05), Vector3(0.66, 1.15, 0.95), Vector3(-0.66, 1.15, 0.95)],
 		GLASS_COLOR)
-	# Aileron.
-	_prism(body, [
-		Vector3(-0.9, 0.95, 1.85), Vector3(0.9, 0.95, 1.85), Vector3(0.9, 0.95, 2.25), Vector3(-0.9, 0.95, 2.25),
-		Vector3(-0.9, 1.02, 1.85), Vector3(0.9, 1.02, 1.85), Vector3(0.9, 1.02, 2.25), Vector3(-0.9, 1.02, 2.25)],
-		color * 0.8)
-	_wheels(body, 0.88, [-1.4, 1.45])
-	_lights(glow, 0.62, 0.62, 2.21, 0.5, 0.48, -2.21)
+	# Ouïes latérales (les « râpes à fromage »).
+	for side in [-1.0, 1.0]:
+		for k in 4:
+			_box(body, Vector3(side * 0.995, 0.5 + k * 0.08, 1.05), Vector3(0.02, 0.035, 1.5), color * 0.35)
+		# Rétroviseur.
+		_box(body, Vector3(side * 0.98, 0.95, -0.5), Vector3(0.16, 0.1, 0.18), color)
+	# Phares escamotables, levés la nuit.
+	for side in [-1.0, 1.0]:
+		_box(body, Vector3(side * 0.55, 0.66, -1.85), Vector3(0.5, 0.14, 0.32), color)
+		_glow_quad(glow, Vector3(side * 0.55, 0.66, -2.02), Vector2(0.42, 0.1), HEAD_COLOR, 1.0)
+	# Arrière : grille noire et bandeau de feux sur toute la largeur.
+	_box(body, Vector3(0.0, 0.62, 2.31), Vector3(1.9, 0.42, 0.02), Color(0.03, 0.03, 0.035))
+	_glow_quad(glow, Vector3(0.0, 0.72, 2.33), Vector2(1.76, 0.1), TAIL_COLOR, 1.0)
+	for side in [-1.0, 1.0]:
+		Halo.add(_halo, Vector3(side * 0.7, 0.72, 2.4), 0.7, TAIL_COLOR, 0.5)
+	for side in [-1.0, 1.0]:
+		_glow_strip(glow, side * 0.55, 2.4, 2.8, 0.5, TAIL_COLOR, 0.22)
+	_wheels(body, 0.9, [-1.45, 1.5])
 
 
 static func _sedan(body: SurfaceTool, glow: SurfaceTool, color: Color) -> void:
@@ -89,6 +107,8 @@ static func _wheels(body: SurfaceTool, x: float, zs: Array) -> void:
 	for wx in [-x, x]:
 		for wz in zs:
 			_box(body, Vector3(wx, 0.33, wz), Vector3(0.32, 0.66, 0.68), TYRE_COLOR)
+			# Jante claire côté extérieur.
+			_box(body, Vector3(wx + signf(wx) * 0.165, 0.33, wz), Vector3(0.02, 0.3, 0.3), Color(0.26, 0.26, 0.28))
 
 
 ## Feux arrière (x, hauteur, z) + phares avant, et reflet des feux sur la route.
@@ -96,6 +116,7 @@ static func _lights(glow: SurfaceTool, tail_x: float, tail_y: float, tail_z: flo
 		head_x: float, head_y: float, head_z: float) -> void:
 	for side in [-1.0, 1.0]:
 		_glow_quad(glow, Vector3(side * tail_x, tail_y, tail_z), Vector2(0.5, 0.14), TAIL_COLOR, 1.0)
+		Halo.add(_halo, Vector3(side * tail_x, tail_y, tail_z + 0.08), 0.75, TAIL_COLOR, 0.5)
 		_glow_quad(glow, Vector3(side * head_x, head_y, head_z), Vector2(0.4, 0.1), HEAD_COLOR, 1.0)
 		_glow_strip(glow, side * tail_x, tail_z + 0.1, 2.8, 0.45, TAIL_COLOR, 0.25)
 
@@ -111,8 +132,12 @@ static func _prism(st: SurfaceTool, c: Array, color: Color) -> void:
 		var face_center: Vector3 = (p[0] + p[1] + p[2] + p[3]) * 0.25
 		if n.dot(face_center - center) < 0.0:
 			n = -n
+		# Ombrage de face figé, façon PS1 : dessus clair, flancs moyens, avant et
+		# arrière plus sombres. Donne du volume sans lumière dynamique.
+		var shade := 0.58 + 0.42 * maxf(n.y, 0.0) + 0.16 * absf(n.x) - 0.25 * maxf(-n.y, 0.0)
+		var shaded := color * shade
 		for i in [0, 1, 2, 0, 2, 3]:
-			st.set_color(Color(color.r, color.g, color.b, 1.0))
+			st.set_color(Color(shaded.r, shaded.g, shaded.b, 1.0))
 			st.set_normal(n)
 			st.add_vertex(p[i])
 
