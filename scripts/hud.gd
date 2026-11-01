@@ -32,6 +32,14 @@ var _overlay_body: Label
 var _overlay_hint: Label
 var _panel: ColorRect
 var _blink := 0.0
+var _radio: Control
+var _radio_text: Label
+var _radio_full := ""
+var _radio_shown := 0.0
+var _radio_hide_at := 0.0
+var _fork_left: Label
+var _fork_right: Label
+var _card: Label
 
 
 static func arcade_font() -> FontFile:
@@ -103,6 +111,30 @@ func _ready() -> void:
 		_play.add_child(r)
 		_speed_bar.append(r)
 
+	# Directions à la prochaine bifurcation.
+	_fork_left = _label(_play, "", arcade_font(), 8, Scenery.LEFT_SIGN.lightened(0.45), Vector2(8, 56), HORIZONTAL_ALIGNMENT_LEFT)
+	_fork_right = _label(_play, "", arcade_font(), 8, Scenery.RIGHT_SIGN.lightened(0.5), Vector2(-8, 56), HORIZONTAL_ALIGNMENT_RIGHT)
+	_fork_right.offset_left = -200.0
+	_fork_left.offset_right = 200.0
+
+	# Radio Nuit : bandeau au-dessus du compteur, texte tapé lettre à lettre.
+	_radio = ColorRect.new()
+	(_radio as ColorRect).color = Color(0.02, 0.01, 0.06, 0.72)
+	_radio.position = Vector2(10, 330)
+	_radio.size = Vector2(250, 62)
+	_radio.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_play.add_child(_radio)
+	_label(_radio, Scenario.STATION, arcade_font(), 8, PINK, Vector2(6, 5), HORIZONTAL_ALIGNMENT_LEFT)
+	_radio_text = _label(_radio, "", arcade_font(), 8, WHITE, Vector2(6, 18), HORIZONTAL_ALIGNMENT_LEFT)
+	_radio_text.offset_right = 244.0
+	_radio_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_radio_text.label_settings.line_spacing = 3.0
+	_radio.visible = false
+
+	# Titre de région (« LA FORÊT ») au centre, qui apparaît puis s'efface.
+	_card = _label(_play, "", arcade_font(), 16, WHITE, Vector2(0, 150), HORIZONTAL_ALIGNMENT_CENTER, true, false, 4)
+	_card.modulate.a = 0.0
+
 	_popups = Control.new()
 	_popups.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_popups.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -133,6 +165,9 @@ func _ready() -> void:
 	_label(_overlay_logo, "DE NUIT", arcade_font(), 24, PINK, Vector2(0, 132), HORIZONTAL_ALIGNMENT_CENTER, true, false, 6)
 	_overlay_title = _label(_overlay, "", arcade_font(), 16, AMBER, Vector2(0, 166), HORIZONTAL_ALIGNMENT_CENTER, true)
 	_overlay_body = _label(_overlay, "", arcade_font(), 8, WHITE, Vector2(0, 196), HORIZONTAL_ALIGNMENT_CENTER, true)
+	_overlay_body.offset_left = 26.0
+	_overlay_body.offset_right = -26.0
+	_overlay_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_overlay_hint = _label(_overlay, "", arcade_font(), 8, AMBER, Vector2(0, -92), HORIZONTAL_ALIGNMENT_CENTER, true, true)
 	_overlay.visible = false
 
@@ -141,6 +176,45 @@ func _process(delta: float) -> void:
 	_blink += delta
 	if _overlay.visible:
 		_overlay_hint.visible = fmod(_blink, 1.0) < 0.65
+	if _radio.visible:
+		_radio_shown = minf(_radio_shown + delta * 38.0, _radio_full.length())
+		_radio_text.text = _radio_full.substr(0, int(_radio_shown))
+		_radio_hide_at -= delta
+		if _radio_hide_at <= 0.0:
+			_radio.visible = false
+	if _overlay.visible and _overlay_body.visible_ratio < 1.0:
+		_overlay_body.visible_ratio = minf(1.0, _overlay_body.visible_ratio + delta * 38.0 / maxf(1.0, _overlay_body.text.length()))
+
+
+## Une réplique de Radio Nuit, tapée lettre à lettre puis effacée.
+func radio(text: String) -> void:
+	_radio_full = text
+	_radio_shown = 0.0
+	_radio_text.text = ""
+	_radio.visible = true
+	_radio_hide_at = text.length() / 38.0 + 4.0
+
+
+func radio_busy() -> bool:
+	return _radio.visible
+
+
+## Directions de la prochaine bifurcation (vide : rien à afficher).
+func fork_prompt(left: String, right: String) -> void:
+	_fork_left.text = ("< " + left) if left != "" else ""
+	_fork_right.text = (right + " >") if right != "" else ""
+	var on := fmod(_blink, 0.8) < 0.55
+	_fork_left.visible = on
+	_fork_right.visible = on
+
+
+## Titre de la région où l'on entre.
+func title_card(text: String) -> void:
+	_card.text = text
+	var tw := create_tween()
+	tw.tween_property(_card, "modulate:a", 1.0, 0.4)
+	tw.tween_interval(2.2)
+	tw.tween_property(_card, "modulate:a", 0.0, 0.8)
 
 
 func set_values(time_left: float, score: float, stage: int, multiplier: float, speed_kmh: float,
@@ -185,6 +259,16 @@ func show_overlay(title: String, body: String, hint: String, logo := false) -> v
 	_overlay_title.text = title
 	_overlay_body.text = body
 	_overlay_body.position.y = 300.0 if logo else 198.0
+	# Les fins se dévoilent lettre à lettre, comme la radio.
+	_overlay_body.visible_ratio = 1.0 if logo else 0.0
+	if not logo:
+		_radio.visible = false
+		_overlay_body.reset_size()
+		var lines := _overlay_body.get_line_count()
+		_panel.size.y = clampf(lines * 12.0 + 70.0, 200.0, 330.0)
+		_panel.position.y = 150.0 if _panel.size.y < 260.0 else 110.0
+		_overlay_title.position.y = _panel.position.y + 16.0
+		_overlay_body.position.y = _panel.position.y + 48.0
 	_overlay_hint.text = hint
 	_blink = 0.0
 

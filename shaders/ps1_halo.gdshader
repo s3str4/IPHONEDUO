@@ -10,12 +10,15 @@ uniform float intensity = 1.0;
 
 varying float fog_f;
 varying vec2 corner;
+varying float near_fade;
 
 void vertex() {
 	vec4 view = MODELVIEW_MATRIX * vec4(VERTEX, 1.0);
 	view.xy += UV * UV2.x;
 	POSITION = ps1_snap(PROJECTION_MATRIX * view);
 	fog_f = ps1_fog_factor(-view.z);
+	// Tout près de la caméra (sous un lampadaire), un halo emplirait l'écran.
+	near_fade = smoothstep(5.0, 16.0, -view.z);
 	corner = UV;
 }
 
@@ -24,5 +27,5 @@ void fragment() {
 	float a = clamp(1.0 - r, 0.0, 1.0);
 	a = a * a;
 	a = floor(a * 5.0 + 0.5) / 5.0;
-	ALBEDO = COLOR.rgb * COLOR.a * a * intensity * (1.0 - fog_f * 0.7);
+	ALBEDO = COLOR.rgb * COLOR.a * a * intensity * (1.0 - fog_f * 0.7) * near_fade;
 }

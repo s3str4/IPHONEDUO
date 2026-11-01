@@ -17,6 +17,12 @@ func _initialize() -> void:
 	_test_run_rules()
 	_test_traffic_rules()
 	_test_balance()
+	_test_route_map()
+	_test_branching_track()
+	_test_divider()
+	_test_forks_and_endings()
+	_test_fork_traffic()
+	_test_events_and_story()
 	await _test_thumb_input()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -79,12 +85,13 @@ func _test_autopilot_drives_clean() -> void:
 		var top := 0.0
 		var worst_x := 0.0
 		for i in 60 * 180:
-			car.step(t, 1.0, car.autopilot_steer(t, 0.0), 1.0 / 60.0)
+			# Voie de gauche : le terre-plein des bifurcations occupe le milieu.
+			car.step(t, 1.0, car.autopilot_steer(t, -4.0), 1.0 / 60.0)
 			t.ensure(car.s + 500.0)
 			t.trim(car.s - 300.0)
 			top = maxf(top, car.speed_kmh())
 			worst_x = maxf(worst_x, absf(car.x))
-		_check(car.rail_hits == 0 and worst_x < CarPhysics.ROAD_HALF_WIDTH,
+		_check(car.rail_hits == 0 and worst_x < CarPhysics.ROAD_HALF_WIDTH + 0.5,
 				"graine %d : 3 min à fond sans sortir de la route" % seed,
 				"chocs %d, écart max %.1f m" % [car.rail_hits, worst_x])
 		_check(top > 260.0, "graine %d : vitesse de pointe atteinte" % seed, "%.0f km/h" % top)
@@ -134,7 +141,9 @@ func _test_chunks_are_valid() -> void:
 	var st := RunConfig.station_s(0)
 	var chunk := sb.build_chunk(int(st / RoadBuilder.CHUNK_LENGTH))
 	var labels := chunk.get_children().filter(func(n: Node) -> bool: return n is Label3D)
-	_check(labels.size() == 1 and labels[0].text == "STATION 1", "station : portique et son texte", str(labels.size()))
+	var texts := labels.map(func(l: Label3D) -> String: return l.text)
+	_check("STATION 1" in texts and "< LA FORÊT" in texts and "LE PORT >" in texts,
+			"station : portique, son texte et les deux directions", str(texts))
 	chunk.free()
 	_check(is_zero_approx(sb.ground_height(st - RoadBuilder.STATION_SITE_BACK, 30.0)), "station : aire plate")
 	# Chaque décor périodique tombe dans exactement un tronçon.
@@ -199,14 +208,14 @@ func _test_thumb_input() -> void:
 func _test_run_rules() -> void:
 	var g := GameRun.new()
 	g.start()
-	g.update(100.0, false, 1.0)
+	g.update(100.0, 0.0, false, 1.0)
 	_check(is_equal_approx(g.score, 100.0) and is_equal_approx(g.time_left, RunConfig.START_TIME - 1.0),
 			"partie : le score suit la distance, le chrono descend", "score %.0f, temps %.1f" % [g.score, g.time_left])
 	var before := g.time_left
-	g.update(RunConfig.station_s(0) + 1.0, false, 0.0)
+	g.update(RunConfig.station_s(0) + 1.0, 0.0, false, 0.0)
 	_check(is_equal_approx(g.time_left, before + RunConfig.STATION_TIME[0]) and g.next_station == 1,
 			"station : temps rendu une seule fois", "temps %.1f" % g.time_left)
-	g.update(RunConfig.station_s(0) + 2.0, false, 0.0)
+	g.update(RunConfig.station_s(0) + 2.0, 0.0, false, 0.0)
 	_check(g.next_station == 1, "station : pas de double bonus")
 	g.on_near_miss()
 	g.on_near_miss()
@@ -215,12 +224,12 @@ func _test_run_rules() -> void:
 	_check(is_equal_approx(g.multiplier(), 1.0), "choc : le multiplicateur retombe à ×1")
 	var t := GameRun.new()
 	t.start()
-	t.update(10.0, false, RunConfig.START_TIME + 1.0)
+	t.update(10.0, 0.0, false, RunConfig.START_TIME + 1.0)
 	_check(t.state == GameRun.State.TIME_UP, "chrono à zéro : la nuit gagne")
 	var a := GameRun.new()
 	a.start(RunConfig.arrival_s() - 10.0)
 	a.time_left = 12.3
-	a.update(RunConfig.arrival_s() + 1.0, false, 0.0)
+	a.update(RunConfig.arrival_s() + 1.0, 0.0, false, 0.0)
 	_check(a.state == GameRun.State.ARRIVED and a.time_bonus == 13 * RunConfig.TIME_BONUS_PER_SECOND,
 			"aube : arrivée et bonus de temps", "bonus %d" % a.time_bonus)
 
@@ -365,3 +374,176 @@ func _true_wall(tr: Traffic, a: Traffic.Vehicle) -> bool:
 				if maxf(s0, maxf(s1, s2)) - minf(s0, minf(s1, s2)) < Traffic.WALL_SPAN:
 					return true
 	return false
+
+
+# --- M2 : bifurcations, ambiances, fins, événements --------------------------
+
+func _test_route_map() -> void:
+	var count := 0
+	var ok := true
+	for k in RouteMap.STAGES.size():
+		_check(RouteMap.STAGES[k].size() == k + 1, "carte : l'étape %d compte %d tronçons" % [k + 1, k + 1])
+		for id in RouteMap.STAGES[k]:
+			count += 1
+			ok = ok and RouteMap.THEMES.has(id)
+	_check(count == 15 and ok, "carte : 15 tronçons, tous avec une ambiance", str(count))
+	_check(RouteMap.node_of(4, [0, 0, 0, 0]) == 0 and RouteMap.node_of(4, [1, 1, 1, 1]) == 4
+			and RouteMap.node_of(4, [1, 0, 1, 0]) == 2, "carte : le rang = nombre de virages à droite")
+	_check(RouteMap.stage_at(RouteMap.region_start(2) - 1.0) == 1 and RouteMap.stage_at(RouteMap.region_start(2)) == 2,
+			"carte : les régions commencent à la fin du terre-plein")
+	for k in range(1, RouteMap.STAGES.size()):
+		_check(is_zero_approx(fmod(RouteMap.region_start(k), RoadBuilder.CHUNK_LENGTH)),
+				"carte : la région %d commence au début d'un tronçon de 100 m" % (k + 1))
+
+
+func _test_branching_track() -> void:
+	# Sans choix connu, la route s'arrête à la fin du premier terre-plein.
+	var w := Track.new(1, true)
+	w.ensure(20000.0)
+	_check(w.end_s() <= RouteMap.region_start(1) + Track.STEP and w.end_s() > RouteMap.region_start(1) - 10.0,
+			"tracé : rien n'est généré au-delà d'une bifurcation non choisie", "%.0f" % w.end_s())
+	w.choices.assign([1])
+	w.ensure(8000.0)
+	_check(w.end_s() >= 8000.0, "tracé : le choix connu, la route reprend")
+	# Un même tronçon a la même forme, quel que soit le chemin pour y arriver.
+	var a := Track.new(7, true)
+	a.choices.assign([1, 0, 0, 0])
+	var b := Track.new(7, true)
+	b.choices.assign([0, 1, 0, 0])
+	a.ensure(16000.0)
+	b.ensure(16000.0)
+	var same := true
+	var s := RouteMap.region_start(2)
+	while s < RouteMap.region_start(3) - 10.0:
+		same = same and is_equal_approx(a.curvature_at(s), b.curvature_at(s))
+		s += 20.0
+	_check(same, "tracé : même tronçon, même forme (gauche puis droite = droite puis gauche)")
+	var c := Track.new(7, true)
+	c.choices.assign([0, 0, 0, 0])
+	c.ensure(16000.0)
+	var differs := false
+	s = RouteMap.region_start(2)
+	while s < RouteMap.region_start(3) - 10.0:
+		differs = differs or not is_equal_approx(a.curvature_at(s), c.curvature_at(s))
+		s += 20.0
+	_check(differs, "tracé : un autre tronçon a une autre forme")
+	# Continuité et bornes sur le chemin le plus sinueux (col).
+	var r := Track.new(3, true)
+	r.choices.assign([1, 1, 1, 1])
+	r.ensure(RunConfig.arrival_s() + 200.0)
+	var worst_gap := 0.0
+	var worst_curv := 0.0
+	var straight := true
+	s = Track.STEP
+	while s < RunConfig.arrival_s():
+		worst_gap = maxf(worst_gap, absf(r.point_at(s).distance_to(r.point_at(s - Track.STEP)) - Track.STEP))
+		worst_curv = maxf(worst_curv, absf(r.curvature_at(s)))
+		if RouteMap.divider_fork(s) != -1 and absf(r.curvature_at(s)) > 1e-6:
+			straight = false
+		s += Track.STEP
+	_check(worst_gap < 0.01 and worst_curv <= Track.MAX_CURVATURE + 1e-6,
+			"tracé : continu et borné jusqu'à l'aube (chemin de droite)", "écart %.3f, courbure %.4f" % [worst_gap, worst_curv])
+	_check(straight, "tracé : la route est droite le long des terre-pleins")
+
+
+func _test_divider() -> void:
+	var t := Track.new(1)
+	var f := RouteMap.fork_s(0)
+	# Au milieu au nez du terre-plein : choc.
+	var car := CarPhysics.new()
+	car.s = f + RouteMap.DIVIDER_START - 1.0
+	car.speed = 70.0
+	var hit := false
+	for i in 10:
+		car.step(t, 1.0, 0.0, 1.0 / 60.0)
+		hit = hit or car.hit_divider
+	_check(hit and car.speed < 35.0, "terre-plein : arriver au milieu, c'est le percuter", "%.0f m/s" % car.speed)
+	# Côté gauche : pas de choc, et impossible de passer à droite.
+	var left := CarPhysics.new()
+	left.s = f
+	left.x = -4.0
+	left.speed = 70.0
+	var crossed := false
+	var hit_left := false
+	for i in 240:
+		# Tout droit jusqu'au nez, puis braquage à fond vers la droite.
+		var steer := 1.0 if RouteMap.divider_fork(left.s) != -1 else left.autopilot_steer(t, -4.0)
+		left.step(t, 1.0, steer, 1.0 / 60.0)
+		hit_left = hit_left or left.hit_divider
+		if RouteMap.divider_fork(left.s) != -1 and left.x > -1.0:
+			crossed = true
+	_check(not hit_left and not crossed, "terre-plein : on reste du côté choisi", "x %.2f" % left.x)
+
+
+func _test_forks_and_endings() -> void:
+	for ending in RouteMap.ENDINGS.size():
+		var path := []
+		for k in 4:
+			path.append(1 if k < ending else 0)
+		var g := GameRun.new()
+		g.start()
+		var regions := []
+		g.region_entered.connect(func(stage: int, id: String) -> void: regions.append(id))
+		var s := 0.0
+		while g.state == GameRun.State.RUNNING:
+			var k := g.choices.size()
+			var x := 0.0
+			if k < 4:
+				x = 4.0 if path[k] == 1 else -4.0
+			g.time_left = 100.0
+			s += 50.0
+			g.update(s, x, false, 0.01)
+		_check(g.state == GameRun.State.ARRIVED and g.ending == ending and g.choices == path,
+				"fins : le chemin %s mène à %s" % [str(path), RouteMap.ENDINGS[ending]], "fin %d" % g.ending)
+		_check(regions.size() == 4 and regions[3] == RouteMap.STAGES[4][ending],
+				"fins : 4 régions traversées vers %s" % RouteMap.ENDINGS[ending], str(regions))
+
+
+func _test_fork_traffic() -> void:
+	var tr := Traffic.new(4)
+	tr.density = 12.0
+	var runner := CarPhysics.new()
+	runner.x = 7.0
+	var in_middle := 0
+	for i in 60 * 140:
+		runner.s += 70.0 / 60.0
+		runner.speed = 70.0
+		tr.update(runner, 1.0 / 60.0)
+		for v in tr.vehicles:
+			if RouteMap.divider_fork(v.s) != -1 and absf(v.x) < RouteMap.DIVIDER_HALF_WIDTH + v.half_width():
+				in_middle += 1
+	_check(in_middle == 0, "trafic : aucun véhicule dans le terre-plein", "%d" % in_middle)
+	# Le bon pilote prend le côté demandé à chaque bifurcation.
+	var r := Sim.run(2, Sim.Driver.GOOD, [1, 0, 1, 1])
+	_check(r.game.choices == [1, 0, 1, 1], "pilote : il prend les directions demandées", str(r.game.choices))
+
+
+func _test_events_and_story() -> void:
+	var d0 := EventDirector.new(5, 0)
+	var d1 := EventDirector.new(5, 1)
+	_check(d1.plan["stoppeuse"] > d0.plan["stoppeuse"], "événements : l'auto-stoppeuse est plus loin à chaque partie")
+	var fired := d0.crossed(0.0, RunConfig.arrival_s())
+	_check(fired.size() == 5, "événements : les 5 événements de route se déclenchent", str(fired))
+	_check(d0.crossed(0.0, RunConfig.arrival_s()).is_empty(), "événements : une seule fois chacun")
+	var p := d0.panneau_at(0.0, RunConfig.arrival_s())
+	_check(p.size() == 3, "événements : trois panneaux « VOUS ÊTES ICI »")
+	for id in RouteMap.THEMES:
+		_check(Scenario.RADIO.has(id) or id == "autoroute", "radio : une réplique pour %s" % id)
+	var all := {"stoppeuse": true, "radio_live": true, "panneau": true, "fantome": true}
+	_check(Scenario.ending_text(4, all).contains("Lou, à dix-sept ans"), "fins : l'épilogue secret avec 4 événements")
+	_check(not Scenario.ending_text(4, {"panneau": true}).contains("dix-sept"), "fins : pas d'épilogue sans eux")
+	for e in 5:
+		_check(Scenario.ending_text(e, {}).length() > 80, "fins : un texte pour %s" % RouteMap.ENDINGS[e])
+	# Toutes les lettres des textes existent dans la police pixel.
+	var font := Hud.arcade_font()
+	var texts := Scenario.RADIO.values() + Scenario.DETAILS.values() + [Scenario.EPILOGUE]
+	for en in Scenario.ENDINGS:
+		texts.append_array(en)
+	for th in RouteMap.THEMES.values():
+		texts.append(th["name"])
+	var missing := ""
+	for txt in texts:
+		for ch in txt:
+			if ch != "\n" and not font.has_char(ch.unicode_at(0)) and not missing.contains(ch):
+				missing += ch
+	_check(missing == "", "police : tous les caractères des textes existent", missing)

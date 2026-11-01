@@ -22,7 +22,7 @@ static var _halo: SurfaceTool
 
 ## Construit le maillage d'un véhicule. `beam` : faisceau des phares au sol.
 static func build(kind: Kind, color: Color, body_material: Material, glow_material: Material,
-		beam := false) -> ArrayMesh:
+		beam := false, lights := true) -> ArrayMesh:
 	var body := SurfaceTool.new()
 	body.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var glow := SurfaceTool.new()
@@ -41,10 +41,12 @@ static func build(kind: Kind, color: Color, body_material: Material, glow_materi
 	var mesh := ArrayMesh.new()
 	body.commit(mesh)
 	mesh.surface_set_material(0, body_material)
-	glow.commit(mesh)
-	mesh.surface_set_material(1, glow_material)
-	_halo.commit(mesh)
-	mesh.surface_set_material(2, Halo.material())
+	# Feux éteints (la voiture fantôme) : ni lumières ni halos.
+	if lights:
+		glow.commit(mesh)
+		mesh.surface_set_material(1, glow_material)
+		_halo.commit(mesh)
+		mesh.surface_set_material(2, Halo.material())
 	return mesh
 
 

@@ -9,6 +9,7 @@ const COLORS := [
 const TRUCK_COLORS := [Color(0.7, 0.7, 0.72), Color(0.45, 0.12, 0.1), Color(0.18, 0.3, 0.5), Color(0.8, 0.62, 0.2)]
 
 var _meshes := {}
+var _ghost_mesh: ArrayMesh
 var _pool: Array[MeshInstance3D] = []
 var _body_material: ShaderMaterial
 var _glow_material: ShaderMaterial
@@ -22,6 +23,7 @@ func _ready() -> void:
 	_glow_material = ShaderMaterial.new()
 	_glow_material.shader = load("res://shaders/ps1_glow.gdshader")
 	_glow_material.set_shader_parameter("intensity", 0.9)
+	_ghost_mesh = VehicleMesh.build(VehicleMesh.Kind.SPORT, Color(0.35, 0.05, 0.05), _body_material, _glow_material, false, false)
 	for kind in [VehicleMesh.Kind.SPORT, VehicleMesh.Kind.SEDAN, VehicleMesh.Kind.TRUCK]:
 		var palette: Array = TRUCK_COLORS if kind == VehicleMesh.Kind.TRUCK else COLORS
 		for i in palette.size():
@@ -36,13 +38,16 @@ func _ready() -> void:
 
 func sync(traffic: Traffic, track: Track) -> void:
 	var i := 0
-	for v in traffic.vehicles:
+	var all := traffic.vehicles.duplicate()
+	if traffic.ghost != null:
+		all.append(traffic.ghost)
+	for v in all:
 		if i >= _pool.size():
 			break
 		if v.s < track.start_s() or v.s > track.end_s():
 			continue
 		var mi := _pool[i]
-		mi.mesh = _meshes[Vector2i(v.kind, v.variant % 4)]
+		mi.mesh = _ghost_mesh if v == traffic.ghost else _meshes[Vector2i(v.kind, v.variant % 4)]
 		mi.transform = track.transform_at(v.s, v.x)
 		# Léger cap pendant les changements de voie.
 		mi.rotate_object_local(Vector3.UP, -clampf(v.target_x - v.x, -1.0, 1.0) * 0.08)

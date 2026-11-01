@@ -18,6 +18,8 @@ const CRASH_COOLDOWN := 1.0
 ## gardent une marge plus large.
 const WALL_SPAN := 22.0
 const SPAWN_WALL_SPAN := 40.0
+## Avant une bifurcation, la voie du milieu se vide sur cette longueur (m).
+const FORK_CLEAR_BEFORE := 380.0
 
 
 class Vehicle:
@@ -42,8 +44,14 @@ class Vehicle:
 
 
 var vehicles: Array[Vehicle] = []
-## Véhicules par km (réglé par étape).
+## Voiture fantôme (événement) : roule à côté du joueur, phares éteints, sans
+## collision ; hors de `vehicles` pour ne gêner ni le trafic ni ses règles.
+var ghost: Vehicle
+var _ghost_time := 0.0
+## Véhicules par km (réglé par étape et par ambiance).
 var density := 6.0
+## Part de camions (réglée par ambiance).
+var truck_ratio := 0.2
 
 var _rng := RandomNumberGenerator.new()
 var _next_spawn_s := 0.0
@@ -58,6 +66,7 @@ func _init(seed: int = 1) -> void:
 ## Renvoie les événements : [{"type": "crash"}, {"type": "near_miss"}].
 func update(car: CarPhysics, delta: float) -> Array:
 	_spawn(car.s)
+	_drive_ghost(car, delta)
 	var events := []
 	for v in vehicles:
 		_drive(v, car, delta)
@@ -65,15 +74,41 @@ func update(car: CarPhysics, delta: float) -> Array:
 		var e := _contact(v, car)
 		if e != "":
 			events.append({"type": e})
-	vehicles = vehicles.filter(func(v: Vehicle) -> bool: return v.s > car.s - DESPAWN_BEHIND)
+	vehicles = vehicles.filter(func(v: Vehicle) -> bool:
+		return v.s > car.s - DESPAWN_BEHIND and not (absf(v.x) < 2.0 and RouteMap.divider_fork(v.s + v.half_length()) != -1))
 	return events
+
+
+## Fait apparaître la voiture fantôme à côté du joueur, dans la voie voisine.
+func spawn_ghost(car: CarPhysics) -> void:
+	ghost = Vehicle.new()
+	ghost.kind = VehicleMesh.Kind.SPORT
+	ghost.x = car.x + (4.0 if car.x < 0.0 else -4.0)
+	ghost.target_x = ghost.x
+	ghost.s = car.s - 20.0
+	ghost.speed = car.speed + 8.0
+	_ghost_time = 0.0
+
+
+func _drive_ghost(car: CarPhysics, delta: float) -> void:
+	if ghost == null:
+		return
+	_ghost_time += delta
+	if _ghost_time < EventDirector.GHOST_DURATION:
+		# Se cale à hauteur du joueur et y reste.
+		ghost.speed = car.speed + clampf(car.s - ghost.s, -10.0, 10.0)
+	else:
+		ghost.speed += 12.0 * delta
+	ghost.s += ghost.speed * delta
+	if ghost.s > car.s + 260.0:
+		ghost = null
 
 
 ## Voie la plus dégagée devant (pilote automatique et tests).
 func best_lane(car: CarPhysics) -> float:
 	var best_x: float = LANES[_nearest_lane(car.x)]
 	var best_gap := -1.0
-	for lane_x in LANES:
+	for lane_x in usable_lanes(car.s + 60.0):
 		var gap := _free_gap(car, lane_x)
 		# Ne pas se jeter sur un véhicule juste à côté.
 		if lane_x != LANES[_nearest_lane(car.x)] and _blocked_beside(car, lane_x):
@@ -93,9 +128,15 @@ func _spawn(player_s: float) -> void:
 		var s := _next_spawn_s
 		_next_spawn_s += -log(1.0 - _rng.randf() * 0.999) * 1000.0 / maxf(density, 0.1)
 		var lane := _rng.randi_range(0, LANES.size() - 1)
+		# Zone de bifurcation : pas de nouveaux venus (une seule voie par côté le
+		# long du terre-plein, un véhicule lent y boucherait tout).
+		if in_fork_zone(s):
+			continue
 		var free := -1
 		for k in LANES.size():
 			var l := (lane + k) % LANES.size()
+			if not LANES[l] in usable_lanes(s):
+				continue
 			if _lane_clear(LANES[l], s, SAME_LANE_GAP):
 				free = l
 				break
@@ -106,7 +147,7 @@ func _spawn(player_s: float) -> void:
 		v.x = LANES[free]
 		v.target_x = v.x
 		var r := _rng.randf()
-		v.kind = VehicleMesh.Kind.TRUCK if r < 0.2 else (VehicleMesh.Kind.SPORT if r > 0.88 else VehicleMesh.Kind.SEDAN)
+		v.kind = VehicleMesh.Kind.TRUCK if r < truck_ratio else (VehicleMesh.Kind.SPORT if r > 0.88 else VehicleMesh.Kind.SEDAN)
 		v.variant = _rng.randi_range(0, 3)
 		v.cruise = _rng.randf_range(21.0, 25.0) if v.kind == VehicleMesh.Kind.TRUCK else _rng.randf_range(25.0, 37.0)
 		v.speed = v.cruise
@@ -117,6 +158,9 @@ func _drive(v: Vehicle, car: CarPhysics, delta: float) -> void:
 	v.cooldown = maxf(0.0, v.cooldown - delta)
 	var ahead := _vehicle_ahead(v)
 	var wanted := v.cruise
+	# Bifurcation devant : quitter la voie du milieu avant le terre-plein.
+	if absf(v.target_x) < 1.0 and not 0.0 in usable_lanes(v.s + 60.0):
+		_try_lane_change(v, car)
 	if ahead != null:
 		var gap := ahead.s - ahead.half_length() - (v.s + v.half_length())
 		if gap < 28.0 and ahead.speed < v.speed and is_equal_approx(v.x, v.target_x):
@@ -157,6 +201,8 @@ func _try_lane_change(v: Vehicle, car: CarPhysics) -> bool:
 	if options.size() == 2 and _rng.randf() < 0.5:
 		options.reverse()
 	for lane_x in options:
+		if not lane_x in usable_lanes(v.s) or not lane_x in usable_lanes(v.s + 80.0):
+			continue
 		# Pas de queue de poisson au joueur : il doit être loin derrière.
 		var player_gap := v.s - car.s
 		if absf(car.x - lane_x) < 3.0 and player_gap > -10.0 and player_gap < 90.0:
@@ -196,9 +242,24 @@ func _contact(v: Vehicle, car: CarPhysics) -> String:
 	return ""
 
 
-## Un véhicule en (lane_x, s) fermerait-il les 3 voies ? (`self_v` est ignoré.)
+## Voies praticables en s : les 3, ou seulement celles de côté à l'approche
+## et le long du terre-plein d'une bifurcation.
+func usable_lanes(s: float) -> Array:
+	return [LANES[0], LANES[2]] if in_fork_zone(s) else LANES
+
+
+func in_fork_zone(s: float) -> bool:
+	for k in RouteMap.STAGES.size() - 1:
+		var f := RouteMap.fork_s(k)
+		if s > f - FORK_CLEAR_BEFORE and s < f + RouteMap.DIVIDER_END:
+			return true
+	return false
+
+
+## Un véhicule en (lane_x, s) fermerait-il toutes les voies praticables ?
+## (`self_v` est ignoré.)
 func _would_wall(lane_x: float, s: float, self_v: Vehicle, span: float = WALL_SPAN) -> bool:
-	for other_lane in LANES:
+	for other_lane in usable_lanes(s):
 		if absf(other_lane - lane_x) < 1.0:
 			continue
 		var occupied := false
@@ -227,7 +288,7 @@ func _third_lane_clear(from_x: float, to_x: float, self_v: Vehicle) -> bool:
 ## juste devant lui, renvoie la vitesse du plus lent des deux ; sinon 0.
 func _joining_wall_speed(v: Vehicle) -> float:
 	var slowest := INF
-	for other_lane in LANES:
+	for other_lane in usable_lanes(v.s):
 		if absf(other_lane - v.x) < 1.0:
 			continue
 		var found := false

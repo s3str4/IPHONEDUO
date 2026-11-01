@@ -59,13 +59,30 @@ Pas d'accéléromètre par défaut (option dans les réglages).
 Aube         Mer  Ville Barrage Montagne Nulle-part
 ```
 
-Chaque segment dure environ 80 à 100 s à bonne vitesse et a son ambiance
-(forêt, autoroute vide, zone industrielle, col, côte, tunnel…). La gauche est
-plus facile, la droite plus dure et mieux payée en score.
+Chaque segment dure environ 80 s à bonne vitesse et a son ambiance
+(`scripts/route_map.gd`) :
+
+| Étape | Tronçons (de gauche à droite) |
+|---|---|
+| 1 | L'Autoroute |
+| 2 | La Forêt · Le Port |
+| 3 | Le Lac · Les Faubourgs · Les Usines |
+| 4 | La Côte · Le Périphérique · La Vallée · Le Col |
+| 5 | Les Dunes · Le Centre · La Retenue · Les Tunnels · La Route Blanche |
+
+La gauche est plus facile, la droite plus dure (trafic, camions, virages,
+brouillard, neige) et mieux payée : bonus de destination de 0 à 25 000 points.
+
+**La bifurcation** : juste après le portique de la station, un terre-plein
+sépare la route sur 360 m. Le côté où l'on est à son nez décide de la suite ;
+y arriver au milieu, c'est le percuter. Des panneaux (vert à gauche, bleu à
+droite) annoncent les directions à 600 m et sous le portique, et elles
+s'affichent en haut de l'écran 1,2 km avant. La route est droite et le trafic
+quitte la voie du milieu à l'approche.
 
 ### Chrono et stations-service
 
-- Départ avec 75 s au compteur.
+- Départ avec 88 s au compteur (voir `scripts/run_config.gd`).
 - Chaque fin de segment = une **station-service** éclairée : la traverser
   ajoute du temps (bonus dégressif selon l'étape).
 - Chrono à zéro = la voiture s'arrête, la nuit gagne. Écran de fin avec score.
@@ -87,32 +104,30 @@ brouillard, virages serrés, animaux sur la route (rare).
 
 ## 5. Événements étranges
 
-Chaque segment a une chance de déclencher un événement. Ils modifient la partie
-(temps, score, visibilité) et posent des **marques d'histoire** qui changent
-les détails des fins. Exemples :
+Six événements, posés par `scripts/event_director.gd`, laissent des
+**marques d'histoire** qui changent les détails des fins (détail dans
+`docs/SCENARIO.md`) :
 
-- **L'auto-stoppeuse** : toujours la même silhouette, à chaque partie un peu
-  plus loin sur la route.
-- **Le panneau qui se répète** : « Station 2 km » trois fois de suite.
-- **La radio qui parle de toi** : l'animateur annonce ta vitesse, ta voiture,
-  ta direction.
-- **La voiture sans conducteur** qui roule à ta hauteur, phares éteints.
-- **La station vide** : tout est allumé, personne, une seule pompe décrochée.
-- **Le tunnel trop long** : la musique ralentit, le chrono aussi.
+- **L'auto-stoppeuse** : ciré jaune, pouce levé, à chaque partie un peu plus loin.
+- **La radio parle de toi** : Marceau annonce ta vitesse et ta région.
+- **Le panneau qui se répète** : « VOUS ÊTES ICI », trois fois de suite.
+- **La station vide** : la station 3 baigne dans une lumière bleue, personne.
+- **La voiture fantôme** : une sportive rouge, phares éteints, roule à ta
+  hauteur puis s'évanouit (on ne peut pas la percuter).
+- **Le tunnel trop long** (Les Tunnels) : le chrono s'arrête.
 
 Règle : un événement ne doit jamais être injuste. S'il gêne, il donne quelque
 chose (temps, score, information).
 
 ## 6. Histoire et fins
 
-On ne dit jamais tout. Qui a appelé ? Pourquoi l'aube ? Chaque fin révèle un
-morceau, et les marques d'histoire récoltées en route changent des détails
-(qui est là, ce que dit la radio au lever du soleil). La fin « Nulle-part » est
-la plus dure et la plus étrange : elle ne s'atteint qu'en ayant vu certains
-événements.
+On ne dit jamais tout. La voix au téléphone, c'est Lou, la sœur du joueur,
+perdue de vue depuis dix ans. Chaque fin révèle un morceau, et les marques
+d'histoire changent des détails. « Nulle Part » (toujours à droite) est la
+plus dure et la plus étrange ; avec au moins 4 événements vus, elle cache un
+épilogue secret.
 
-Le scénario complet (trame, voix de l'animateur, textes des fins) sera dans
-`docs/SCENARIO.md` (étape M2).
+Le scénario complet est dans `docs/SCENARIO.md`.
 
 ## 7. La radio
 
@@ -217,6 +232,24 @@ stations. Tout synthétisé par code.
     fond ; aucune image sans route devant la voiture sur une minute à fond.
   - Reste pour plus tard : bruitages et musique (M3), vraie mesure de
     performance sur iPhone (M4).
+
+- **M2 (la nuit entière) : livré.**
+  - Pyramide de 15 tronçons, 4 bifurcations à terre-plein, 5 destinations.
+    Chaque tronçon a sa propre route (même tronçon = même forme, quel que soit
+    le chemin) et son ambiance : lampadaires sodium ou LED (ou aucun), forêt
+    dense, eau (lac, mer, port), maisons, tours aux fenêtres allumées,
+    conteneurs et grues, usines et torchères, tunnels, neige, brouillard.
+  - Radio Nuit 98.4 : Marceau commente la nuit (texte tapé lettre à lettre),
+    titre de chaque région à l'écran.
+  - Six événements étranges, cinq fins et un épilogue secret ; sauvegarde
+    des fins découvertes et du nombre de parties.
+  - Trafic adapté aux bifurcations (voie du milieu dégagée, pas de nouveaux
+    véhicules le long du terre-plein, règle anti-mur sur 2 voies).
+  - Équilibrage : le pilote automatique atteint chacune des 5 destinations
+    (29 parties sur 30) ; un pilote à 215 km/h ou qui ignore le trafic, jamais.
+  - 112 tests, dont : chaque chemin mène à la bonne fin, rien n'est généré
+    au-delà d'une bifurcation non choisie, le terre-plein retient la voiture,
+    toutes les lettres des textes existent dans la police.
 
 ## 13. Rôles
 

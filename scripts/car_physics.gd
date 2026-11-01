@@ -23,6 +23,7 @@ const RAIL_SPEED_LOSS := 0.82    # vitesse gardée à chaque choc contre la glis
 const RAIL_SCRAPE_DRAG := 12.0   # m/s² en frottant contre la glissière
 const CAR_HALF_WIDTH := 0.9
 const CAR_LENGTH := 4.4
+const DIVIDER_SPEED_KEPT := 0.4  # percuter le nez du terre-plein
 
 var s := 0.0
 var x := 0.0
@@ -37,6 +38,10 @@ var hit_rail := false
 
 var _lift_time := 0.0
 var _on_rail := false
+## Côté du terre-plein où roule la voiture (-1, 1), 0 hors bifurcation.
+var _divider_side := 0
+## Vrai pendant l'image où la voiture percute le nez du terre-plein.
+var hit_divider := false
 
 
 func step(track: Track, throttle: float, steer: float, delta: float) -> void:
@@ -81,7 +86,32 @@ func step(track: Track, throttle: float, steer: float, delta: float) -> void:
 	elif absf(x) < limit - 0.3:
 		_on_rail = false
 
+	_divider(delta)
 	s += speed * delta
+
+
+## Terre-plein des bifurcations : on reste du côté choisi à son nez ; y
+## arriver au milieu, c'est le percuter de plein fouet.
+func _divider(delta: float) -> void:
+	hit_divider = false
+	var fork := RouteMap.divider_fork(s)
+	if fork == -1:
+		_divider_side = 0
+		return
+	var inner := RouteMap.DIVIDER_HALF_WIDTH + CAR_HALF_WIDTH
+	if _divider_side == 0:
+		_divider_side = 1 if x > 0.0 else -1
+		if absf(x) < inner:
+			speed *= DIVIDER_SPEED_KEPT
+			rail_hits += 1
+			hit_divider = true
+			x = _divider_side * inner
+			lateral = _divider_side * 3.0
+			return
+	if x * _divider_side < inner:
+		x = _divider_side * inner
+		speed = maxf(0.0, speed - RAIL_SCRAPE_DRAG * delta)
+		lateral = _divider_side * 1.5
 
 
 func speed_kmh() -> float:

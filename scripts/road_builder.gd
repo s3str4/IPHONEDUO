@@ -4,9 +4,16 @@ extends RefCounted
 ## glissières, terrain, arbres, lampadaires et leurs reflets sur la route mouillée.
 ## Tout est en géométrie low-poly à couleurs de sommet ; la lumière des
 ## lampadaires est précalculée dans l'alpha des couleurs (voir ps1_lit.gdshader).
+##
+## Chaque région suit l'ambiance de son tronçon (RouteMap.THEMES) : lampadaires
+## sodium ou LED, sol, arbres, eau, tunnels, et les décors de Scenery.
 
 const CHUNK_LENGTH := 100.0
+## Écart de référence entre lampadaires (ambiance « autoroute »).
 const LAMP_SPACING := 48.0
+## Tunnels : longueur et écart (m) dans les ambiances qui en ont.
+const TUNNEL_PERIOD := 760.0
+const TUNNEL_OFFSET := 260.0
 const LAMP_SIGMA := 9.0          # étalement de la flaque de lumière (m)
 const LAMP_POOL_X := 5.0         # centre de la flaque, côté lampadaire
 const LAMP_POLE_X := 9.2
@@ -35,6 +42,10 @@ const BILLBOARDS := [
 ]
 
 var track: Track
+## Choix connus aux bifurcations : ils décident des ambiances.
+var choices: Array = []
+## Événements étranges de la partie (décors qui en dépendent), ou null.
+var events: EventDirector
 ## Positions (s) des stations-service et de l'arrivée (portiques).
 var stations := PackedFloat32Array()
 var arrival_s := -1.0
@@ -43,6 +54,15 @@ var env_material: ShaderMaterial
 var glow_material: ShaderMaterial
 
 var _seed := 1
+## Matériaux par couleur de lampadaire (la lumière précalculée en prend la teinte).
+var _materials := {}
+var water_material: ShaderMaterial
+## Lampadaires du tronçon en construction (lamp_light est appelé par sommet).
+var _lamp_cache := []
+var _lamp_cache_from := 0.0
+var _lamp_cache_to := 0.0
+## Ambiance du tronçon en construction.
+var _theme: Dictionary
 ## Halos du tronçon en cours de construction.
 var _halo: SurfaceTool
 var _noise := FastNoiseLite.new()
@@ -65,27 +85,76 @@ func _init(p_track: Track, seed: int = 1) -> void:
 	env_material.set_shader_parameter("affine_strength", 0.0)
 	glow_material = ShaderMaterial.new()
 	glow_material.shader = load("res://shaders/ps1_glow.gdshader")
+	water_material = ShaderMaterial.new()
+	water_material.shader = lit
+	water_material.set_shader_parameter("affine_strength", 0.0)
+	water_material.set_shader_parameter("wet_sheen", 1.6)
+	water_material.set_shader_parameter("albedo_color", Color(0.5, 0.6, 0.75))
+	_materials[RouteMap.THEMES["autoroute"]["lamp_color"]] = [road_material, env_material]
+
+
+## Ambiance du tronçon qui contient s.
+func theme_at(s: float) -> Dictionary:
+	return RouteMap.theme(RouteMap.stage_at(s), choices)
+
+
+## Matériaux route / décor teintés par la lumière des lampadaires de l'ambiance.
+func _materials_for(theme: Dictionary) -> Array:
+	var c: Color = theme.get("lamp_color", LAMP_COLOR)
+	if not _materials.has(c):
+		var road: ShaderMaterial = road_material.duplicate()
+		var env: ShaderMaterial = env_material.duplicate()
+		var tint := Vector3(c.r, c.g, c.b) * 2.4
+		road.set_shader_parameter("baked_tint", tint)
+		env.set_shader_parameter("baked_tint", tint)
+		_materials[c] = [road, env]
+	return _materials[c]
 
 
 # --- Lumière précalculée ----------------------------------------------------
 
 ## Le lampadaire numéro k existe-t-il (certains sont en panne), et de quel côté ?
 ## Renvoie 0 si éteint, sinon -1 (gauche) ou 1 (droite).
-func lamp_side(k: int) -> int:
-	if _hash(k) < 0.12:
+func lamp_side(k: int, stage: int = 0) -> int:
+	if _hash(k + stage * 100003) < 0.12:
 		return 0
 	return 1 if posmod(k, 2) == 0 else -1
 
 
+## Positions des lampadaires dans [s0, s1) : [s, côté (0 = en panne)].
+func lamps_between(s0: float, s1: float) -> Array:
+	var out := []
+	var stage := RouteMap.stage_at(s0)
+	while stage < RouteMap.STAGES.size():
+		var r0 := RouteMap.region_start(stage)
+		var r1 := RouteMap.region_start(stage + 1) if stage + 1 < RouteMap.STAGES.size() else INF
+		var spacing: float = RouteMap.theme(stage, choices).get("lamps", LAMP_SPACING)
+		if spacing > 0.0:
+			var k := int(ceil((maxf(s0, r0) - r0) / spacing))
+			while r0 + k * spacing < minf(s1, r1):
+				var ls := r0 + k * spacing
+				if not in_tunnel(ls):
+					out.append([ls, lamp_side(k, stage)])
+				k += 1
+		if r1 >= s1:
+			break
+		stage += 1
+	return out
+
+
 ## Intensité de la lumière des lampadaires au point (s, x), 0..~1.
 func lamp_light(s: float, x: float) -> float:
-	var k0 := int(floor(s / LAMP_SPACING))
 	var total := 0.0
-	for k in range(k0 - 1, k0 + 3):
-		var side := lamp_side(k)
-		if side == 0:
+	if in_tunnel(s):
+		# Tunnel : rampe continue au plafond, qui pulse au rythme des lampes.
+		return 0.55 + 0.3 * cos(s * TAU / 8.0) * (1.0 - absf(x) / 12.0)
+	var lamps := _lamp_cache if s >= _lamp_cache_from and s < _lamp_cache_to \
+			else lamps_between(s - 3.0 * LAMP_SIGMA, s + 3.0 * LAMP_SIGMA)
+	for lamp in lamps:
+		var side: int = lamp[1]
+		var ds: float = s - lamp[0]
+		if side == 0 or absf(ds) > 3.0 * LAMP_SIGMA:
 			continue
-		var ds := s - float(k) * LAMP_SPACING
 		var dx := x - side * LAMP_POOL_X
 		total += exp(-(ds * ds + dx * dx * 1.6) / (2.0 * LAMP_SIGMA * LAMP_SIGMA))
 	# L'auvent de la station inonde la route et l'aire de lumière.
@@ -126,6 +195,24 @@ func _station_flat(s: float, x: float) -> float:
 	return smoothstep(STATION_SITE_HALF + 12.0, STATION_SITE_HALF, absf(site)) * smoothstep(56.0, 46.0, x)
 
 
+## La route est-elle sous un tunnel en s ?
+func in_tunnel(s: float) -> bool:
+	var stage := RouteMap.stage_at(s)
+	if RouteMap.theme(stage, choices).get("tunnels", 0.0) <= 0.0:
+		return false
+	var r0 := RouteMap.region_start(stage)
+	var r1 := RouteMap.fork_s(stage) if stage < RouteMap.STAGES.size() - 1 else arrival_s
+	var d := s - r0 - TUNNEL_OFFSET
+	if d < 0.0 or s > r1 - 600.0:
+		return false
+	return fmod(d, TUNNEL_PERIOD) < TUNNEL_PERIOD * RouteMap.theme(stage, choices).get("tunnels", 0.0)
+
+
+## Côté de l'eau en s (-1, 1) ou 0.
+func water_side(s: float) -> int:
+	return int(theme_at(s).get("water", 0))
+
+
 ## Hauteur du terrain par rapport à la route, à x mètres du centre.
 func ground_height(s: float, x: float) -> float:
 	var ax := absf(x)
@@ -134,6 +221,8 @@ func ground_height(s: float, x: float) -> float:
 	if ax <= 11.0:
 		return lerpf(0.0, -1.0, (ax - 8.0) / 3.0)
 	var p := track.point_at(s) + track.right_at(s) * x
+	if water_side(s) != 0 and signf(x) == water_side(s) and _station_flat(s, x) <= 0.0:
+		return -1.6
 	var relief := smoothstep(11.0, 80.0, ax) * 12.0
 	var h := -1.0 + (_noise.get_noise_2d(p.x, p.z) * 0.5 + 0.5) * relief
 	return lerpf(h, 0.0, _station_flat(s, x))
@@ -145,12 +234,17 @@ func build_chunk(index: int) -> MeshInstance3D:
 	var s0 := float(index) * CHUNK_LENGTH
 	var s1 := s0 + CHUNK_LENGTH
 	track.ensure(s1 + LAMP_SPACING)
+	_theme = theme_at(s0 + 1.0)
+	_lamp_cache = lamps_between(s0 - 3.0 * LAMP_SIGMA - 1.0, s1 + 3.0 * LAMP_SIGMA + 1.0)
+	_lamp_cache_from = s0 - 1.0
+	_lamp_cache_to = s1 + 1.0
 	var road := _new_tool()
 	var env := _new_tool()
 	var glow := _new_tool()
+	var water := _new_tool()
 	_halo = _new_tool()
 	_build_road(road, s0, s1)
-	_build_shoulders_and_ground(env, s0, s1)
+	_build_shoulders_and_ground(env, water, s0, s1)
 	_build_rails(env, s0, s1)
 	_build_lamps(env, glow, s0, s1)
 	_build_trees(env, index, s0, s1)
@@ -165,16 +259,28 @@ func build_chunk(index: int) -> MeshInstance3D:
 			labels.append(_build_sign(env, sign_s, "STATION\n1 km"))
 	if arrival_s >= s0 and arrival_s < s1:
 		labels.append(_build_gantry(env, glow, arrival_s, "AUBE"))
-	_build_pylons(env, s0, s1)
-	for bs in _every(BILLBOARD_SPACING, 330.0, s0, s1):
-		if not _near_checkpoint(bs, 160.0):
-			labels.append(_build_billboard(env, glow, bs, int(bs / BILLBOARD_SPACING)))
-	for br in _every(BRIDGE_SPACING, 620.0, s0, s1):
-		if not _near_checkpoint(br, 200.0):
-			_build_bridge(env, glow, br)
+	if _theme.get("pylons", true):
+		_build_pylons(env, s0, s1)
+	if events != null:
+		for ps in events.panneau_at(s0, s1):
+			labels.append(_build_billboard(env, glow, ps, -1))
+		var hs: float = events.plan["stoppeuse"]
+		if hs >= s0 and hs < s1:
+			_build_hitchhiker(env, hs)
+	if _theme.get("billboards", true):
+		for bs in _every(BILLBOARD_SPACING, 330.0, s0, s1):
+			if not _near_checkpoint(bs, 160.0) and not in_tunnel(bs) and not _near_panneau(bs):
+				labels.append(_build_billboard(env, glow, bs, int(bs / BILLBOARD_SPACING)))
+	if _theme.get("bridges", true):
+		for br in _every(BRIDGE_SPACING, 620.0, s0, s1):
+			if not _near_checkpoint(br, 200.0) and not in_tunnel(br):
+				_build_bridge(env, glow, br)
+	labels.append_array(Scenery.build(self, env, glow, index, s0, s1))
 
+	var mats := _materials_for(_theme)
 	var mesh := ArrayMesh.new()
-	for part in [[road, road_material], [env, env_material], [glow, glow_material], [_halo, Halo.material()]]:
+	for part in [[road, mats[0]], [env, mats[1]], [water, water_material], [glow, glow_material],
+			[_halo, Halo.material()]]:
 		var arrays: Array = part[0].commit_to_arrays()
 		if arrays[Mesh.ARRAY_VERTEX] == null or arrays[Mesh.ARRAY_VERTEX].is_empty():
 			continue
@@ -185,7 +291,8 @@ func build_chunk(index: int) -> MeshInstance3D:
 	mi.name = "Chunk%d" % index
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	for l in labels:
-		mi.add_child(l)
+		if l != null:
+			mi.add_child(l)
 	return mi
 
 
@@ -249,9 +356,33 @@ func _cable_point(a: Vector3, b: Vector3, sa: float, sb: float, off: float, h: f
 	return p
 
 
-## Panneau publicitaire éclairé sur la droite.
+func _near_panneau(s: float) -> bool:
+	return events != null and s > events.plan["panneau"] - 250.0 \
+			and s < events.plan["panneau"] + 2.0 * EventDirector.PANNEAU_SPACING + 250.0
+
+
+## L'auto-stoppeuse : ciré jaune, pouce levé, sur l'accotement droit, dans la
+## lumière d'une lampe de chantier.
+func _build_hitchhiker(env: SurfaceTool, s: float) -> void:
+	var yaw := track.yaw_at(s)
+	var coat := Color(0.85, 0.68, 0.12)
+	var dark := Color(0.08, 0.08, 0.1)
+	var x := 7.3
+	_box(env, _road_pos(s, x - 0.12, 0.0), yaw, Vector3(0.16, 0.85, 0.2), dark, 0.9)
+	_box(env, _road_pos(s, x + 0.12, 0.0), yaw, Vector3(0.16, 0.85, 0.2), dark, 0.9)
+	_box(env, _road_pos(s, x, 0.85), yaw, Vector3(0.55, 0.75, 0.32), coat, 1.0)
+	_box(env, _road_pos(s, x, 1.62), yaw, Vector3(0.24, 0.26, 0.24), Color(0.75, 0.6, 0.5), 1.0)
+	_box(env, _road_pos(s, x, 1.84), yaw, Vector3(0.3, 0.12, 0.3), coat, 1.0)
+	# Bras tendu vers la route, pouce levé.
+	_box(env, _road_pos(s, x - 0.5, 1.35), yaw, Vector3(0.55, 0.12, 0.12), coat, 1.0)
+	_box(env, _road_pos(s, x - 0.75, 1.4), yaw, Vector3(0.07, 0.16, 0.07), Color(0.75, 0.6, 0.5), 1.0)
+	Halo.add(_halo, _road_pos(s + 1.5, x + 0.8, 2.6), 2.2, Color(1.0, 0.95, 0.8), 0.35)
+
+
+## Panneau publicitaire éclairé sur la droite (k = -1 : « VOUS ÊTES ICI »).
 func _build_billboard(env: SurfaceTool, glow: SurfaceTool, s: float, k: int) -> Label3D:
-	var entry: Array = BILLBOARDS[posmod(k, BILLBOARDS.size())]
+	var entry: Array = ["VOUS ÊTES\nICI", Color(0.95, 0.25, 0.5)] if k < 0 \
+			else BILLBOARDS[posmod(k, BILLBOARDS.size())]
 	var color: Color = entry[1]
 	var yaw := track.yaw_at(s)
 	var x := 15.0
@@ -299,6 +430,10 @@ func _build_bridge(env: SurfaceTool, glow: SurfaceTool, s: float) -> void:
 func _build_station(env: SurfaceTool, glow: SurfaceTool, st: float, s0: float, s1: float) -> void:
 	var c := st - STATION_SITE_BACK
 	var pieces := []
+	# La station vide : tout baigne dans une lumière bleue, froide.
+	var empty := events != null and is_equal_approx(st, events.plan["station_vide"])
+	var station_light := Color(0.35, 0.55, 1.0) if empty else STATION_LIGHT
+	var sign_color := Color(0.3, 0.5, 1.0) if empty else SIGN_COLOR
 	# Auvent : piliers, toit, sous-face lumineuse.
 	for ps in [c - 10.0, c + 10.0]:
 		for px in [15.0, 29.0]:
@@ -307,16 +442,16 @@ func _build_station(env: SurfaceTool, glow: SurfaceTool, st: float, s0: float, s
 	# Pompes.
 	for ps in [c - 6.0, c, c + 6.0]:
 		pieces.append(["box", ps, 22.0, 0.0, Vector3(0.8, 1.6, 1.2), Color(0.8, 0.18, 0.12), 0.9])
-		pieces.append(["glow", ps, 21.55, 1.0, Vector3(0.05, 0.35, 0.6), STATION_LIGHT, 0.8])
+		pieces.append(["glow", ps, 21.55, 1.0, Vector3(0.05, 0.35, 0.6), station_light, 0.8])
 	# Boutique et sa vitrine.
 	pieces.append(["box", c + 4.0, 41.0, 0.0, Vector3(9.0, 4.0, 22.0), Color(0.55, 0.53, 0.5), 0.5])
 	pieces.append(["glow", c + 4.0, 36.45, 0.6, Vector3(0.05, 2.0, 16.0), Color(1.0, 0.85, 0.55), 0.9])
 	# Totem lumineux au bord de la route.
 	pieces.append(["box", c - 30.0, 11.5, 0.0, Vector3(0.4, 11.0, 0.4), Color(0.3, 0.3, 0.32), 0.4])
-	pieces.append(["glow", c - 30.0, 11.5, 11.0, Vector3(0.3, 2.6, 3.4), SIGN_COLOR, 1.0])
-	pieces.append(["halo", c - 30.0, 11.5, 12.3, 5.0, SIGN_COLOR, 0.45])
+	pieces.append(["glow", c - 30.0, 11.5, 11.0, Vector3(0.3, 2.6, 3.4), sign_color, 1.0])
+	pieces.append(["halo", c - 30.0, 11.5, 12.3, 5.0, sign_color, 0.45])
 	for ps in [c - 9.0, c, c + 9.0]:
-		pieces.append(["halo", ps, 22.0, 5.2, 4.0, STATION_LIGHT, 0.3])
+		pieces.append(["halo", ps, 22.0, 5.2, 4.0, station_light, 0.3])
 	for p in pieces:
 		var ps: float = p[1]
 		if ps < s0 or ps >= s1:
@@ -332,9 +467,9 @@ func _build_station(env: SurfaceTool, glow: SurfaceTool, st: float, s0: float, s
 			"roof":
 				_box(env, _road_pos(ps, p[2], 5.6), yaw, Vector3(18.0, 0.8, 28.0), Color(0.9, 0.9, 0.92), 0.7)
 				# Bandeau orange sur la tranche de l'auvent, côté route.
-				_glow_box(glow, _road_pos(ps, 12.95, 5.65), yaw, Vector3(0.1, 0.7, 28.0), SIGN_COLOR, 0.9)
+				_glow_box(glow, _road_pos(ps, 12.95, 5.65), yaw, Vector3(0.1, 0.7, 28.0), sign_color, 0.9)
 				# Sous-face : un grand aplat lumineux tourné vers le bas.
-				_glow_box(glow, _road_pos(ps, 22.0, 5.55), yaw, Vector3(17.0, 0.02, 27.0), STATION_LIGHT, 0.55)
+				_glow_box(glow, _road_pos(ps, 22.0, 5.55), yaw, Vector3(17.0, 0.02, 27.0), station_light, 0.55)
 
 
 ## Portique au-dessus de la route (point de passage), avec son texte.
@@ -428,10 +563,12 @@ func _build_road(st: SurfaceTool, s0: float, s1: float) -> void:
 			_quad(st, pts, [tint, tint, tint, tint], lights, uvs)
 
 
-func _build_shoulders_and_ground(st: SurfaceTool, s0: float, s1: float) -> void:
+func _build_shoulders_and_ground(st: SurfaceTool, water: SurfaceTool, s0: float, s1: float) -> void:
 	var gravel := Color(0.22, 0.21, 0.2)
-	var grass_near := Color(0.07, 0.11, 0.08)
-	var grass_far := Color(0.04, 0.06, 0.07)
+	var grass_near: Color = _theme.get("ground", Color(0.07, 0.11, 0.08))
+	var grass_far := grass_near * 0.6 + Color(0.0, 0.0, 0.02)
+	var wside := water_side(s0 + 1.0)
+	var tunnel_chunk := in_tunnel(s0) and in_tunnel(s1 - 1.0)
 	for i in _steps(s0, s1):
 		var sa := s0 + i * Track.STEP
 		var sb := sa + Track.STEP
@@ -439,6 +576,14 @@ func _build_shoulders_and_ground(st: SurfaceTool, s0: float, s1: float) -> void:
 			# Accotement de 6 à 8 m.
 			var xs := [6.0 * side, 8.0 * side]
 			_strip(st, sa, sb, xs[0], xs[1], 0.0, 0.0, gravel, gravel, side)
+			if tunnel_chunk:
+				continue
+			# Eau (lac, mer, port) : talus jusqu'à 11 m, puis une nappe sombre.
+			if side == wside and _station_flat(sa, 30.0 * side) <= 0.0:
+				_strip(st, sa, sb, 8.0 * side, 11.0 * side, 0.0, 0.0, grass_near, gravel * 0.6, side, true)
+				_strip(water, sa, sb, 11.0 * side, 90.0 * side, -1.6, -1.6, Color(0.015, 0.025, 0.045),
+						Color(0.01, 0.015, 0.03), side)
+				continue
 			# Terrain.
 			for c in GROUND_COLUMNS.size() - 1:
 				var xa: float = GROUND_COLUMNS[c] * side
@@ -496,13 +641,12 @@ func _build_rails(st: SurfaceTool, s0: float, s1: float) -> void:
 
 func _build_lamps(env: SurfaceTool, glow: SurfaceTool, s0: float, s1: float) -> void:
 	var pole := Color(0.2, 0.21, 0.23)
-	var k0 := int(ceil(s0 / LAMP_SPACING))
-	var k1 := int(floor((s1 - 0.001) / LAMP_SPACING))
-	for k in range(k0, k1 + 1):
-		var side := lamp_side(k)
-		var s := float(k) * LAMP_SPACING
+	var lamp_color: Color = _theme.get("lamp_color", LAMP_COLOR)
+	for lamp in lamps_between(s0, s1):
+		var s: float = lamp[0]
+		var side: int = lamp[1]
 		var yaw := track.yaw_at(s)
-		var light_side := side if side != 0 else (1 if posmod(k, 2) == 0 else -1)
+		var light_side := side if side != 0 else (1 if posmod(int(s), 2) == 0 else -1)
 		var px := LAMP_POLE_X * light_side
 		var on := 0.6 if side != 0 else 0.08
 		# Mât et bras.
@@ -512,10 +656,10 @@ func _build_lamps(env: SurfaceTool, glow: SurfaceTool, s0: float, s1: float) -> 
 		if side == 0:
 			continue
 		# Ampoule.
-		_glow_box(glow, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.45), yaw, Vector3(0.9, 0.25, 0.5), LAMP_COLOR, 1.0)
-		Halo.add(_halo, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.4), 2.6, LAMP_COLOR, 0.5)
+		_glow_box(glow, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.45), yaw, Vector3(0.9, 0.25, 0.5), lamp_color, 1.0)
+		Halo.add(_halo, _road_pos(s, 6.5 * side, LAMP_HEIGHT - 0.4), 2.6, lamp_color, 0.5)
 		# Reflet sur la route mouillée, étiré vers la caméra (derrière, s plus petit).
-		_reflection(glow, s, LAMP_POOL_X * side * 0.9, 18.0, 1.6, LAMP_COLOR, 0.55)
+		_reflection(glow, s, LAMP_POOL_X * side * 0.9, 18.0, 1.6, lamp_color, 0.55)
 
 
 ## Reflet allongé couché sur la chaussée : intense près de la source (s_src),
@@ -539,18 +683,28 @@ func _reflection(st: SurfaceTool, s_src: float, x: float, length: float, width: 
 func _build_trees(st: SurfaceTool, index: int, s0: float, s1: float) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash(Vector2i(index, _seed))
+	var density: float = _theme.get("trees", 0.55)
+	var foliage := Color(0.5, 0.55, 0.6) if _theme.get("snow", false) else Color(0.035, 0.07, 0.06)
+	# Forêt : trois arbres par pas, jusqu'au bord de la route.
+	var near_x := 10.0 if density >= 0.9 else 12.0
+	var per_step := 3 if density >= 0.9 else 1
+	var wside := water_side(s0 + 1.0)
 	var s := s0
 	while s < s1:
 		for side in [-1.0, 1.0]:
-			if rng.randf() < 0.55:
-				var x: float = side * rng.randf_range(12.0, 62.0)
+			for n in per_step:
+				if rng.randf() >= density:
+					continue
+				var far := 62.0 if n == 0 else 30.0
+				var x: float = side * rng.randf_range(near_x, far)
 				var ts := s + rng.randf_range(0.0, 6.0)
-				if _station_flat(ts, x) > 0.0 or _station_flat(ts, x + 8.0) > 0.0:
+				if _station_flat(ts, x) > 0.0 or _station_flat(ts, x + 8.0) > 0.0 \
+						or side == wside or in_tunnel(ts):
 					continue
 				var h := rng.randf_range(6.0, 13.0)
 				var base := _road_pos(ts, x, ground_height(ts, x) - 0.5)
 				var shade := rng.randf_range(0.7, 1.2)
-				_tree(st, base, h, Color(0.035, 0.07, 0.06) * shade, lamp_light(ts, x) * 0.7)
+				_tree(st, base, h, foliage * shade, lamp_light(ts, x) * 0.7)
 		s += 6.0
 
 
