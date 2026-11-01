@@ -1,0 +1,61 @@
+; Engine configuration file.
+; Route de Nuit — jeu iPhone d'arcade nocturne, esthétique PS1 low-poly.
+
+config_version=5
+
+[application]
+
+config/name="Route de Nuit"
+config/description="Une nuit, une route, atteindre l'aube."
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+
+[display]
+
+; Rendu interne en basse résolution (look PS1), agrandi sans lissage.
+window/size/viewport_width=270
+window/size/viewport_height=480
+; Fenêtre de prévisualisation sur PC : portrait, comme l'iPhone.
+window/size/window_width_override=405
+window/size/window_height_override=720
+window/stretch/mode="viewport"
+window/stretch/aspect="expand"
+window/handheld/orientation=1
+
+[input_devices]
+
+pointing/emulate_touch_from_mouse=true
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/canvas_textures/default_texture_filter=0
+textures/default_filters/use_nearest_mipmap_filter=true
+
+[shader_globals]
+
+ps1_snap_resolution={
+"type": "vec2",
+"value": Vector2(135, 240)
+}
+ps1_jitter={
+"type": "float",
+"value": 1.0
+}
+ps1_affine={
+"type": "float",
+"value": 0.5
+}
+ps1_fog_color={
+"type": "color",
+"value": Color(0.05, 0.06, 0.12, 1)
+}
+ps1_fog_start={
+"type": "float",
+"value": 40.0
+}
+ps1_fog_end={
+"type": "float",
+"value": 260.0
+}

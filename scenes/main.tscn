@@ -1,0 +1,95 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1"]
+[ext_resource type="Script" path="res://scripts/car_view.gd" id="2"]
+[ext_resource type="Script" path="res://scripts/thumb_input.gd" id="3"]
+[ext_resource type="Script" path="res://scripts/rain.gd" id="4"]
+[ext_resource type="Shader" path="res://shaders/night_sky.gdshader" id="5"]
+[ext_resource type="Shader" path="res://shaders/ps1_post.gdshader" id="6"]
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("5")
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 2
+ambient_light_color = Color(0.16, 0.18, 0.28, 1)
+ambient_light_energy = 0.5
+tonemap_mode = 0
+
+[sub_resource type="ShaderMaterial" id="post_mat"]
+shader = ExtResource("6")
+
+[sub_resource type="LabelSettings" id="big"]
+font_size = 22
+outline_size = 4
+outline_color = Color(0, 0, 0, 1)
+font_color = Color(1, 0.86, 0.55, 1)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Moon" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, 0.866, 0, -0.866, 0.5, 0, 50, 0)
+light_color = Color(0.55, 0.62, 0.9, 1)
+light_energy = 0.12
+
+[node name="Road" type="Node3D" parent="."]
+
+[node name="Car" type="Node3D" parent="."]
+script = ExtResource("2")
+
+[node name="Camera" type="Camera3D" parent="."]
+keep_aspect = 0
+fov = 70.0
+near = 0.2
+far = 400.0
+
+[node name="Rain" type="CPUParticles3D" parent="Camera"]
+script = ExtResource("4")
+
+[node name="ThumbInput" type="Node" parent="."]
+script = ExtResource("3")
+
+[node name="Post" type="CanvasLayer" parent="."]
+
+[node name="Screen" type="ColorRect" parent="Post"]
+material = SubResource("post_mat")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Hud" type="CanvasLayer" parent="."]
+layer = 2
+
+[node name="Speed" type="Label" parent="Hud"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -80.0
+offset_top = -52.0
+offset_right = 80.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 0
+text = "0 km/h"
+label_settings = SubResource("big")
+horizontal_alignment = 1
+
+[node name="Distance" type="Label" parent="Hud"]
+offset_left = 10.0
+offset_top = 8.0
+offset_right = 140.0
+offset_bottom = 30.0
+text = "0.0 km"
+mouse_filter = 2

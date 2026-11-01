@@ -175,6 +175,16 @@ stations. Tout synthétisé par code.
 | **M4** iPhone | Compilation automatique, TestFlight, réglages tactiles, performances | Le jeu tourne à 60 images/s sur ton iPhone |
 | **M5** Sortie | Menus, achat intégré, Game Center, fiche App Store, confidentialité | Validé par Apple, en ligne |
 
+## 12 bis. Avancement
+
+- **M0 (prototype) : livré, à tester sur iPhone.** Route procédurale infinie
+  (virages, collines), voiture arcade, glissières, lampadaires avec flaques de
+  lumière et reflets sur la route mouillée, pluie, faisceau des phares,
+  caméra portrait, commande au pouce, vitesse et distance à l'écran.
+  Banc d'essai headless dans `tests/`. Reste à valider : la sensation au
+  pouce sur un vrai téléphone (il faut la compilation iOS de M4, ou un test
+  sur PC à la souris en attendant).
+
 ## 13. Rôles
 
 - **Claude** : direction du projet, game design, code, graphismes et sons
