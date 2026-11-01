@@ -4,3 +4,4 @@ build/
 *.ipa
 *.xcarchive
 .DS_Store
+tools/_dbg.gd*
