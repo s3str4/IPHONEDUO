@@ -1,6 +1,6 @@
 # Route de Nuit
 
-Jeu iPhone d'arcade nocturne en low-poly PS1 : une nuit, une route sous la pluie,
+Jeu iPhone d'arcade nocturne néo-rétro : une nuit, une route sous la pluie,
 la radio, des stations-service, et l'aube à atteindre avant la fin du chrono.
 Score à la OutRun, embranchements, cinq fins.
 
@@ -20,6 +20,7 @@ Commandes sur PC :
 | Accélérer | bouton gauche enfoncé | Espace / ↑ / Z |
 | Tourner | glisser à gauche / à droite | ← → / Q D |
 | Freiner | relâcher le bouton (longtemps = frein) | relâcher |
+| Changer de radio | double clic | double clic |
 
 Le glissé est relatif : là où on pose le pouce, les roues sont droites.
 
@@ -73,8 +74,12 @@ godot --headless --path . --script res://tools/balance.gd
 | `scripts/hud.gd` | Interface, écrans de titre et de fin |
 | `scripts/main.gd` | Assemblage, caméra, aube, tronçons à la volée |
 | `scripts/halo.gd` | Halos lumineux face caméra |
-| `shaders/` | Look PS1 (repris de YTSLEEP), ciel de nuit, halos, gouttes à l'écran |
-| `assets/fonts/` | Polices pixel libres (OFL, voir LICENSE.txt) |
+| `scripts/light_field.gd`, `scripts/reflection.gd` | Lumières proches par pixel, reflet de la route mouillée |
+| `scripts/audio_director.gd` | Moteur, ambiances, bruitages, stations de radio |
+| `shaders/` | Éclairage de nuit, route miroir, carrosserie, ciel, cônes, halos, post-traitement |
+| `assets/fonts/` | Polices libres (OFL, voir LICENSE.txt) |
+| `assets/audio/`, `tools/make_audio.py` | Sons et musiques synthétisés |
+| `assets/textures/`, `tools/make_road_texture.py` | Texture de chaussée |
 | `tests/` | Banc d'essai headless et simulation de parties |
 | `tools/balance.gd` | Rapport d'équilibrage |
 | `tools/shot.sh` | Capture d'écran : `tools/shot.sh sortie.png 6 --autopilot --start_s=20000` |

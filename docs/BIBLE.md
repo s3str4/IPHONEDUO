@@ -131,31 +131,42 @@ Le scénario complet est dans `docs/SCENARIO.md`.
 
 ## 7. La radio
 
-- **3 stations** : synthwave nocturne, lo-fi pluie, et la station parlée de
-  l'animateur de nuit (texte à l'écran + parasites, pas de voix humaine).
-- La musique est générée par code (outils hérités de YTSLEEP). Si on veut une
-  bande-son marquante pour la sortie, prévoir un compositeur ou des titres sous
-  licence (décision à prendre en M3).
-- Les tunnels, les ponts et certains événements brouillent la réception.
+- **Radio Nuit 98.4** : musique synthwave, et Marceau qui parle (texte à
+  l'écran, tapé lettre à lettre, avec un grésillement ; pas de voix humaine).
+- **Bleu Nuit 103.7** : lo-fi jazzy sous la pluie.
+- **Radio éteinte** : le moteur, la pluie, le vent.
+- On change de station d'un **double tap**.
+- La musique est générée par code (`tools/make_audio.py`). Pour une bande-son
+  marquante à la sortie, prévoir un compositeur ou des titres sous licence
+  (décision avant M5).
 
 ## 8. Direction artistique
 
-- **PS1 low-poly** : rendu en basse résolution (environ 270 × 480) mis à
-  l'échelle sans lissage, sommets légèrement « tremblants », textures sans
-  filtrage, brouillard de distance, palette nocturne (bleus, ambres des
-  lampadaires, rouges des feux arrière).
-- **Caméra** derrière la voiture, en portrait : la route occupe le centre,
-  le haut de l'écran montre le ciel et l'horizon qui s'éclaircit vers l'aube.
-- **Pluie** : gouttes à l'écran, reflets sur l'asphalte, éclaboussures des camions.
-- **L'aube** se lève progressivement pendant toute la partie : la couleur du
-  ciel est aussi un indicateur de progression.
+Depuis M3 : **néo-rétro haute définition**, plus de look PS1.
+
+- **Nuit mouillée** : la chaussée est un miroir (caméra de réflexion), les
+  lampadaires y laissent de longues traînées, les cônes de lumière se
+  remplissent de pluie, des gouttes coulent sur l'écran.
+- **Lumière par pixel** : les 16 lumières les plus proches (sodium orange,
+  LED blanches, néons des stations, portiques, tunnels) éclairent route,
+  décors et voiture, avec de vrais reflets ; au loin, une lumière précalculée
+  prend le relais. Bloom, courbe de tonalité, étalonnage (ombres bleutées,
+  lumières chaudes), vignette, grain, flou radial à grande vitesse.
+- **Voiture** : sportive « coin de fromage » des années 80 en surfaces
+  lissées, peinture laquée qui renvoie la ville.
+- **Typographie néon** : Monoton (logo), Audiowide (chiffres, titres),
+  Rajdhani (textes), avec une lueur.
+- **Caméra** derrière la voiture, en portrait ; **l'aube** se lève pendant
+  toute la partie et sert de jauge d'avancement.
 - Tout est généré par code et shaders : aucun modèle sculpté à la main.
 
 ## 9. Son
 
-Moteur (tonalité liée au régime), pluie (intensité variable), essuie-glaces,
-pneus sur le mouillé, souffle des camions, parasites radio, carillon des
-stations. Tout synthétisé par code.
+Tout est synthétisé par code (`tools/make_audio.py`, aucun échantillon
+externe) : moteur en deux couches qui suit une boîte à 6 rapports, vent et
+pneus mouillés selon la vitesse, pluie selon la météo, écho dans les tunnels,
+chocs, frôlements, terre-plein, carillon des stations, grésillement radio, et
+deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
 
 ## 10. Modèle économique
 
@@ -172,7 +183,9 @@ stations. Tout synthétisé par code.
 - **Route** : générée par morceaux le long d'une courbe procédurale (virages,
   côtes), morceaux recyclés devant la voiture. Chaque segment est décrit par
   un fichier de données (longueur, courbure, décor, trafic, météo).
-- **Rendu basse résolution** via un SubViewport, puis mise à l'échelle.
+- **Rendu** : 3D en pleine résolution (interface en coordonnées 270 × 480
+  mises à l'échelle), une passe de réflexion à demi-résolution. Sur iPhone,
+  baisser la résolution 3D si besoin (`scaling_3d_scale`, M4).
 - **Cible** : 60 images/s sur iPhone 11 et plus récents.
 - **Compilation iOS** : GitHub Actions sur un Mac de GitHub, puis envoi sur
   TestFlight. Les identifiants Apple sont des secrets du dépôt, jamais dans le code.
@@ -250,6 +263,21 @@ stations. Tout synthétisé par code.
   - 112 tests, dont : chaque chemin mène à la bonne fin, rien n'est généré
     au-delà d'une bifurcation non choisie, le terre-plein retient la voiture,
     toutes les lettres des textes existent dans la police.
+
+- **M3 (beauté et son) : livré.**
+  - Abandon du look PS1 au profit d'un rendu haute définition : route miroir,
+    éclairage par pixel, cônes de lumière, bloom et étalonnage, voiture
+    laquée en surfaces lissées, berlines du trafic redessinées, sapins plus
+    fournis, polices néon.
+  - Son complet et deux stations de musique (voir § 7 et § 9), double tap
+    pour changer de station.
+  - Défauts trouvés en route : normales retournées qui éteignaient
+    l'éclairage, terrain vu par en dessous qui noircissait le reflet, pont
+    éclairé comme un plafond, gouttes trop proches qui barraient l'écran,
+    double tap compté deux fois.
+  - À mesurer en M4 : les performances sur iPhone (deux rendus par image,
+    16 lumières par pixel) ; réglages de repli prévus (réflexion plus
+    petite, moins de lumières).
 
 ## 13. Rôles
 

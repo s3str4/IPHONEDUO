@@ -152,7 +152,8 @@ func lamps_between(s0: float, s1: float) -> Array:
 			var k := int(ceil((maxf(s0, r0) - r0) / spacing))
 			while r0 + k * spacing < minf(s1, r1):
 				var ls := r0 + k * spacing
-				if not in_tunnel(ls):
+				# Pas de lampadaire dans un tunnel ni sous un pont (sa tête toucherait le tablier).
+				if not in_tunnel(ls) and not _under_bridge(ls, stage):
 					out.append([ls, lamp_side(k, stage)])
 				k += 1
 		if r1 >= s1:
@@ -214,6 +215,13 @@ func _station_flat(s: float, x: float) -> float:
 	return smoothstep(STATION_SITE_HALF + 12.0, STATION_SITE_HALF, absf(site)) * smoothstep(56.0, 46.0, x)
 
 
+func _under_bridge(s: float, stage: int) -> bool:
+	if not RouteMap.theme(stage, choices).get("bridges", true):
+		return false
+	var nearest := roundf((s - 620.0) / BRIDGE_SPACING) * BRIDGE_SPACING + 620.0
+	return absf(s - nearest) < 12.0
+
+
 ## La route est-elle sous un tunnel en s ?
 func in_tunnel(s: float) -> bool:
 	var stage := RouteMap.stage_at(s)
@@ -256,7 +264,9 @@ func light_sources(s0: float, s1: float) -> Array:
 	for lamp in lamps_between(s0, s1):
 		if lamp[1] != 0:
 			var c: Color = theme_at(lamp[0]).get("lamp_color", LAMP_COLOR)
-			out.append([_road_pos(lamp[0], 6.5 * lamp[1], LAMP_HEIGHT - 0.6), c, 36.0, 7.0])
+			# Les LED blanches paraissent plus vives que le sodium : un peu moins fort.
+			var power := 5.0 if c.b > 0.8 else 7.0
+			out.append([_road_pos(lamp[0], 6.5 * lamp[1], LAMP_HEIGHT - 0.6), c, 36.0, power])
 	var ts := ceilf(s0 / 8.0) * 8.0
 	while ts < s1:
 		if in_tunnel(ts) and ts < s0 + 160.0:
@@ -280,7 +290,7 @@ func light_sources(s0: float, s1: float) -> Array:
 	if theme_at(s0).get("bridges", true):
 		for br in _every(BRIDGE_SPACING, 620.0, s0, s1):
 			if not _near_checkpoint(br, 200.0) and not in_tunnel(br):
-				out.append([_road_pos(br, 0.0, 6.5), Color(0.85, 0.95, 1.0), 18.0, 5.0])
+				out.append([_road_pos(br, 0.0, 3.0), Color(0.85, 0.95, 1.0), 12.0, 1.2])
 	if theme_at(s0).get("billboards", true):
 		for bs in _every(BILLBOARD_SPACING, 330.0, s0, s1):
 			if not _near_checkpoint(bs, 160.0) and not in_tunnel(bs) and not _near_panneau(bs):
@@ -492,7 +502,7 @@ func _build_billboard(env: SurfaceTool, glow: SurfaceTool, s: float, k: int) -> 
 ## Pont qui enjambe l'autoroute, avec ses lampadaires.
 func _build_bridge(env: SurfaceTool, glow: SurfaceTool, s: float) -> void:
 	var yaw := track.yaw_at(s)
-	var concrete := Color(0.42, 0.41, 0.4)
+	var concrete := Color(0.24, 0.235, 0.23)
 	for side in [-1.0, 1.0]:
 		_box(env, _road_pos(s, 10.5 * side, -1.0), yaw, Vector3(1.6, 8.0, 3.0), concrete, 0.25)
 	# Tablier : très large pour enjamber aussi les bas-côtés.
@@ -800,24 +810,30 @@ func _build_trees(st: SurfaceTool, index: int, s0: float, s1: float) -> void:
 
 
 func _tree(st: SurfaceTool, base: Vector3, height: float, color: Color, light: float) -> void:
-	var sides := 5
-	var tiers := [[0.25, 0.75, height * 0.32], [0.55, 1.0, height * 0.22]]
+	# Sapin en trois étages de branches (8 pans), plus sombre vers le bas.
+	var sides := 8
+	var tiers := [[0.15, 0.62, height * 0.34], [0.38, 0.84, height * 0.26], [0.6, 1.0, height * 0.17]]
+	var trunk := Color(0.09, 0.06, 0.04)
+	_box(st, base, 0.0, Vector3(0.35, height * 0.2, 0.35), trunk, light * 0.5)
 	for t in tiers:
 		var y0: float = height * t[0]
 		var y1: float = height * t[1]
 		var r: float = t[2]
 		var apex := base + Vector3.UP * y1
-		var top_light := light * 0.5
+		var low := color * 0.7
 		for i in sides:
-			var a0 := TAU * i / sides
-			var a1 := TAU * (i + 1) / sides
+			var a0: float = TAU * (i + t[0]) / sides
+			var a1: float = TAU * (i + 1 + t[0]) / sides
 			var p0 := base + Vector3(cos(a0) * r, y0, sin(a0) * r)
 			var p1 := base + Vector3(cos(a1) * r, y0, sin(a1) * r)
-			var n := (p1 - p0).cross(apex - p0).normalized() * -1.0
-			for v in [[p0, light], [apex, top_light], [p1, light]]:
-				st.set_color(Color(color.r, color.g, color.b, v[1]))
+			# Normales penchées vers l'extérieur : ombrage doux d'un cône.
+			var n0 := Vector3(cos(a0), 0.55, sin(a0)).normalized()
+			var n1 := Vector3(cos(a1), 0.55, sin(a1)).normalized()
+			var na := (n0 + n1).normalized()
+			for v in [[p0, n0, low], [apex, na, color], [p1, n1, low]]:
+				st.set_color(Color(v[2].r, v[2].g, v[2].b, light))
 				st.set_uv(Vector2.ZERO)
-				st.set_normal(n)
+				st.set_normal(v[1])
 				st.add_vertex(v[0])
 
 

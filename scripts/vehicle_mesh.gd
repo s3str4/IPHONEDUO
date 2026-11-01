@@ -180,14 +180,32 @@ static func _round_wheels(body: SurfaceTool, x: float, zs: Array) -> void:
 					body.add_vertex(v)
 
 
+## Berline (trafic) : coque à trois volumes, en surfaces lissées.
+const SEDAN_BODY := [
+	[-2.32, 0.82, 0.32, 0.66, 0.7], [-2.2, 0.9, 0.28, 0.76, 0.8], [-1.2, 0.93, 0.27, 0.86, 0.9],
+	[1.3, 0.93, 0.27, 0.88, 0.92], [2.2, 0.91, 0.29, 0.88, 0.92], [2.32, 0.86, 0.34, 0.82, 0.86]]
+const SEDAN_CABIN := [
+	[-1.15, 0.86, 0.88, 0.86, 0.9], [-0.55, 0.86, 0.9, 0.72, 1.42], [0.85, 0.86, 0.91, 0.72, 1.42],
+	[1.35, 0.86, 0.91, 0.86, 0.93]]
+
+
 static func _sedan(body: SurfaceTool, glow: SurfaceTool, color: Color) -> void:
-	_box(body, Vector3(0, 0.62, 0), Vector3(1.85, 0.75, 4.6), color)
-	_prism(body, [
-		Vector3(-0.85, 1.0, -1.0), Vector3(0.85, 1.0, -1.0), Vector3(0.85, 1.0, 1.4), Vector3(-0.85, 1.0, 1.4),
-		Vector3(-0.75, 1.5, -0.5), Vector3(0.75, 1.5, -0.5), Vector3(0.75, 1.5, 1.1), Vector3(-0.75, 1.5, 1.1)],
-		GLASS_COLOR)
-	_wheels(body, 0.86, [-1.5, 1.5])
-	_lights(glow, 0.65, 0.75, 2.31, 0.55, 0.62, -2.31)
+	var shell := SurfaceTool.new()
+	shell.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rings := []
+	for sec in SEDAN_BODY:
+		rings.append(_body_ring(sec[0], sec[1], sec[2], sec[3], sec[4]))
+	_loft(shell, rings, Color(color.r, color.g, color.b, 0.7), true, true)
+	var cabin := []
+	for sec in SEDAN_CABIN:
+		cabin.append(_cabin_ring(sec[0], sec[1], sec[2], sec[3], sec[4]))
+	_loft(shell, cabin, GLASS_COLOR, false)
+	shell.index()
+	shell.generate_normals()
+	shell.deindex()
+	body.append_from(shell.commit(), 0, Transform3D.IDENTITY)
+	_round_wheels(body, 0.86, [-1.5, 1.5])
+	_lights(glow, 0.65, 0.72, 2.34, 0.55, 0.6, -2.34)
 
 
 static func _truck(body: SurfaceTool, glow: SurfaceTool, color: Color) -> void:

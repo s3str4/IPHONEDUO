@@ -44,7 +44,7 @@ void fragment() {
 		N = normalize(N + vec3(rip.x, 0.0, rip.y) * 0.6);
 	}
 
-	float shininess = mix(24.0, 320.0, wetness);
+	float shininess = mix(90.0, 360.0, wetness);
 	vec3 dif;
 	vec3 spe;
 	night_lights(P, N, V, shininess, dif, spe);
@@ -52,7 +52,7 @@ void fragment() {
 	float far = smoothstep(80.0, 150.0, dist);
 	vec3 baked = baked_tint * COLOR.a * baked_strength * mix(0.25, 1.0, far);
 	vec3 col = base * (amb + dif + baked + night_headlight(P, N))
-			+ spe * specular_strength * (0.25 + 0.75 * wetness);
+			+ spe * specular_strength * (0.1 + 0.9 * wetness * wetness);
 
 	// Reflet miroir : la caméra de réflexion voit la scène sous la route.
 	if (reflection_on > 0.5 && reflectivity > 0.0) {

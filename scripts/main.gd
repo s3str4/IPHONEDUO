@@ -82,6 +82,7 @@ var _rain := 1.0
 @onready var reflection: Reflection = $Reflection
 
 var _lights: LightField
+var audio: AudioDirector
 
 
 func _ready() -> void:
@@ -112,6 +113,11 @@ func _ready() -> void:
 	_post_material = $Post/Screen.material
 	_lights = LightField.new()
 	reflection.source = camera
+	audio = AudioDirector.new()
+	add_child(audio)
+	input.double_tapped.connect(func() -> void: hud.popup(audio.next_station(), Hud.PINK, 12, 250.0))
+	game.near_miss.connect(func(_p: int) -> void: audio.play("whoosh", -4.0, randf_range(0.9, 1.15)))
+	game.station_reached.connect(func(_i: int, _t: float) -> void: audio.play("chime", -6.0))
 
 	game.station_reached.connect(_on_station)
 	game.near_miss.connect(func(pts: int) -> void: hud.popup("FRÔLÉ +%d" % pts, Hud.WHITE, 8, 210.0))
@@ -207,6 +213,7 @@ func _physics_process(delta: float) -> void:
 	if car.hit_rail:
 		_shake = 0.5 if car.hit_divider else 0.35
 		game.on_crash(car.s)
+		audio.play("thud" if car.hit_divider else "crash", 0.0 if car.hit_divider else -6.0)
 	var th := builder.theme_at(car.s)
 	traffic.density = RunConfig.TRAFFIC_DENSITY[game.segment()] * th.get("traffic", 1.0)
 	traffic.truck_ratio = th.get("trucks", 0.2)
@@ -214,6 +221,7 @@ func _physics_process(delta: float) -> void:
 		if e.type == "crash":
 			_shake = 0.5
 			game.on_crash(car.s)
+			audio.play("crash", -2.0)
 		else:
 			game.on_near_miss()
 	_update_events()
@@ -240,11 +248,14 @@ func _process(delta: float) -> void:
 	_update_dawn()
 	_update_weather(delta)
 	_update_lighting(delta)
+	audio.update(car.speed, input.throttle if not _args.has("autopilot") else 1.0, _rain if builder.theme_at(car.s).get("rain", 1.0) > 0.0 else 0.0,
+			builder.in_tunnel(car.s), delta)
 	_update_fork_prompt()
 	while not _radio_queue.is_empty() and not hud.radio_busy():
 		var line: Array = _radio_queue.pop_front()
 		if car.s < line[1]:
 			hud.radio(line[0])
+			audio.play("static", -16.0)
 	var cur := int(floor(car.s / RoadBuilder.CHUNK_LENGTH))
 	for i in range(cur, cur + 3):
 		if not _chunks.has(i):

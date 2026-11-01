@@ -23,6 +23,7 @@ func _initialize() -> void:
 	_test_forks_and_endings()
 	_test_fork_traffic()
 	_test_events_and_story()
+	await _test_audio_and_double_tap()
 	await _test_thumb_input()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -548,3 +549,63 @@ func _test_events_and_story() -> void:
 				if ch != "\n" and not font.has_char(ch.unicode_at(0)) and not missing.contains(ch):
 					missing += ch
 	_check(missing == "", "polices : tous les caractères des textes existent", missing)
+
+
+# --- M3 : son --------------------------------------------------------------------
+
+func _test_audio_and_double_tap() -> void:
+	await process_frame
+	var audio := AudioDirector.new()
+	root.add_child(audio)
+	await process_frame
+	# Le régime monte dans un rapport, retombe au passage du suivant.
+	var rpms := []
+	var gears := []
+	var speed := 0.0
+	while speed < CarPhysics.TOP_SPEED:
+		audio.update(speed, 1.0, 1.0, false, 1.0 / 30.0)
+		rpms.append(audio.rpm)
+		gears.append(audio.gear)
+		speed += 0.5
+	var drops := 0
+	for i in range(1, rpms.size()):
+		if gears[i] > gears[i - 1] and rpms[i] < rpms[i - 1]:
+			drops += 1
+	_check(gears[-1] == AudioDirector.GEARS.size() - 2 and drops >= 4,
+			"son : six rapports, le régime retombe à chaque passage", "rapport %d, %d chutes" % [gears[-1], drops])
+	var names := []
+	for i in AudioDirector.STATIONS.size():
+		names.append(audio.next_station())
+	_check(names[-1] == AudioDirector.STATIONS[0]["name"] and names.has("RADIO ÉTEINTE"),
+			"radio : le double tap fait le tour des stations", str(names))
+	for name in ["engine_low", "engine_high", "rain", "wind", "tires", "crash", "whoosh", "chime", "static",
+			"thud", "blip", "music_synthwave", "music_lofi"]:
+		_check(ResourceLoader.exists("res://assets/audio/%s.ogg" % name), "son : %s présent" % name)
+	audio.queue_free()
+	# Double tap : deux touches brèves rapprochées.
+	var input := ThumbInput.new()
+	root.add_child(input)
+	var taps := [0]
+	input.double_tapped.connect(func() -> void: taps[0] += 1)
+	var ev := InputEventScreenTouch.new()
+	ev.index = 0
+	for k in 2:
+		ev.pressed = true
+		input._unhandled_input(ev)
+		input._process(0.1)
+		ev.pressed = false
+		input._unhandled_input(ev)
+		input._process(0.1)
+	_check(taps[0] == 1, "pouce : double tap reconnu", str(taps[0]))
+	# Une longue pression (on roule) suivie d'une touche n'est pas un double tap.
+	ev.pressed = true
+	input._unhandled_input(ev)
+	input._process(1.0)
+	ev.pressed = false
+	input._unhandled_input(ev)
+	input._process(0.1)
+	ev.pressed = true
+	input._unhandled_input(ev)
+	_check(taps[0] == 1, "pouce : lâcher après avoir roulé ne compte pas", str(taps[0]))
+	input.queue_free()
+	await process_frame

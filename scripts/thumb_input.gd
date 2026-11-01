@@ -10,8 +10,15 @@ extends Node
 ## Zone morte au centre, en fraction de la course.
 @export_range(0.0, 0.5) var dead_zone := 0.08
 
+## Double tap (deux touches brèves) : changer de station de radio.
+signal double_tapped
+
 var throttle := 0.0
 var steer := 0.0
+var _press_time := 0.0
+var _last_tap_end := -10.0
+var _clock := 0.0
+var _completes_double_tap := false
 
 var _touch_index := -1
 var _anchor_x := 0.0
@@ -24,13 +31,23 @@ func _unhandled_input(event: InputEvent) -> void:
 			_touch_index = event.index
 			_anchor_x = event.position.x
 			_touch_x = event.position.x
+			_completes_double_tap = _clock - _last_tap_end < 0.3
+			if _completes_double_tap:
+				double_tapped.emit()
+				_last_tap_end = -10.0
+			_press_time = _clock
 		elif not event.pressed and event.index == _touch_index:
 			_touch_index = -1
+			# Une touche brève peut être le premier temps d'un double tap (mais
+			# pas celle qui vient d'en terminer un).
+			if _clock - _press_time < 0.22 and not _completes_double_tap:
+				_last_tap_end = _clock
 	elif event is InputEventScreenDrag and event.index == _touch_index:
 		_touch_x = event.position.x
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	_clock += delta
 	if _touch_index != -1:
 		var width := get_viewport().get_visible_rect().size.x
 		var course := maxf(1.0, width * steer_range)
