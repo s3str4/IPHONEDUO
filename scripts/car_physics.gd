@@ -39,6 +39,12 @@ var hit_rail := false
 ## Multiplicateurs de vitesse de pointe et d'accélération (turbo, aspiration).
 var boost := 1.0
 var accel_boost := 1.0
+## Améliorations du garage (voir Garage.apply) : vitesse de pointe, braquage,
+## adhérence en virage, vitesse gardée dans les chocs.
+var upgrade_top := 1.0
+var steer_mult := 1.0
+var grip := 1.0
+var crash_keep := 0.0
 
 var _lift_time := 0.0
 var _on_rail := false
@@ -50,7 +56,7 @@ var hit_divider := false
 
 func step(track: Track, throttle: float, steer: float, delta: float) -> void:
 	steer = clampf(steer, -1.0, 1.0)
-	var top := TOP_SPEED * boost
+	var top := TOP_SPEED * boost * upgrade_top
 	var v_ratio := minf(speed / TOP_SPEED, 1.0)
 
 	# Longitudinal.
@@ -72,10 +78,10 @@ func step(track: Track, throttle: float, steer: float, delta: float) -> void:
 		speed = maxf(0.0, speed - SHOULDER_DRAG * clampf(off / (SHOULDER - ROAD_HALF_WIDTH), 0.0, 1.0) * delta)
 
 	# Latéral : le braquage vise une vitesse latérale, le virage pousse dehors.
-	var steer_speed := lerpf(STEER_SPEED_LOW, STEER_SPEED_HIGH, v_ratio) * minf(1.0, speed / 6.0)
+	var steer_speed := lerpf(STEER_SPEED_LOW, STEER_SPEED_HIGH, v_ratio) * minf(1.0, speed / 6.0) * steer_mult
 	var target := steer * steer_speed
 	lateral = lerpf(lateral, target, 1.0 - exp(-STEER_RESPONSE * delta))
-	var push := track.curvature_at(s) * speed * speed * CENTRIFUGAL
+	var push := track.curvature_at(s) * speed * speed * CENTRIFUGAL * grip
 	# Virage à droite (κ > 0) : poussée vers la gauche.
 	x += (lateral - push) * delta
 	slip = lerpf(slip, clampf((lateral - push) / maxf(speed, 1.0) * 2.5, -0.5, 0.5), 1.0 - exp(-6.0 * delta))
@@ -86,7 +92,7 @@ func step(track: Track, throttle: float, steer: float, delta: float) -> void:
 	if absf(x) >= limit:
 		x = signf(x) * limit
 		if not _on_rail:
-			speed *= RAIL_SPEED_LOSS
+			speed *= minf(RAIL_SPEED_LOSS + crash_keep * 0.5, 0.95)
 			rail_hits += 1
 			hit_rail = true
 		else:
@@ -112,7 +118,7 @@ func _divider(delta: float) -> void:
 	if _divider_side == 0:
 		_divider_side = 1 if x > 0.0 else -1
 		if absf(x) < inner:
-			speed *= DIVIDER_SPEED_KEPT
+			speed *= DIVIDER_SPEED_KEPT + crash_keep
 			rail_hits += 1
 			hit_divider = true
 			x = _divider_side * inner
@@ -131,9 +137,9 @@ func speed_kmh() -> float:
 ## Pilote automatique (tests, captures) : renvoie le braquage qui compense la
 ## poussée du virage et ramène la voiture vers target_x.
 func autopilot_steer(track: Track, target_x: float) -> float:
-	var steer_speed := lerpf(STEER_SPEED_LOW, STEER_SPEED_HIGH, speed / TOP_SPEED) * minf(1.0, speed / 6.0)
+	var steer_speed := lerpf(STEER_SPEED_LOW, STEER_SPEED_HIGH, minf(speed / TOP_SPEED, 1.0)) * minf(1.0, speed / 6.0) * steer_mult
 	if steer_speed <= 0.0:
 		return 0.0
-	var push := track.curvature_at(s + speed * 0.3) * speed * speed * CENTRIFUGAL
+	var push := track.curvature_at(s + speed * 0.3) * speed * speed * CENTRIFUGAL * grip
 	var wanted := push + (target_x - x) * 2.5
 	return clampf(wanted / steer_speed, -1.0, 1.0)

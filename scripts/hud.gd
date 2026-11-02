@@ -10,6 +10,7 @@ const PINK := Color(1.0, 0.4, 0.6)
 const RED := Color(1.0, 0.3, 0.22)
 const WHITE := Color(0.95, 0.95, 1.0)
 const DIM := Color(0.6, 0.62, 0.72)
+const LOU_BLUE := Color(0.55, 0.82, 1.0)
 const SPEED_SEGMENTS := 14
 
 static var _arcade: FontFile
@@ -35,6 +36,7 @@ var _overlay_hint: Label
 var _panel: ColorRect
 var _blink := 0.0
 var _radio: Control
+var _radio_header: Label
 var _radio_text: Label
 var _radio_full := ""
 var _radio_shown := 0.0
@@ -43,6 +45,7 @@ var _fork_left: Label
 var _fork_right: Label
 var _card: Label
 var _hint: Label
+var _title_button: Button
 var _turbo_back: ColorRect
 var _turbo_fill: ColorRect
 var _turbo_label: Label
@@ -51,6 +54,13 @@ var _paused := false
 ## Le bouton pause est touché ; une touche pendant la pause demande la reprise.
 signal pause_pressed
 signal resume_requested
+## Boutons de l'écran titre.
+signal journal_pressed
+signal settings_pressed
+signal daily_pressed
+signal garage_pressed
+## Retour à l'écran titre (fin de partie, pause).
+signal title_pressed
 
 
 ## Chiffres et titres (Audiowide).
@@ -153,7 +163,8 @@ func _ready() -> void:
 	_radio.size = Vector2(250, 62)
 	_radio.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_play.add_child(_radio)
-	_label(_radio, Scenario.STATION, arcade_font(), 8, PINK, Vector2(6, 4), HORIZONTAL_ALIGNMENT_LEFT)
+	_radio_header = _label(_radio, Scenario.STATION, arcade_font(), 8, PINK, Vector2(6, 4), HORIZONTAL_ALIGNMENT_LEFT)
+	_radio_header.offset_right = 244.0
 	_radio_text = _label(_radio, "", text_font(), 11, WHITE, Vector2(6, 16), HORIZONTAL_ALIGNMENT_LEFT)
 	_radio_text.offset_right = 244.0
 	_radio_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -207,6 +218,27 @@ func _ready() -> void:
 	_overlay_logo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_overlay_logo.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_overlay.add_child(_overlay_logo)
+	# Boutons du titre : une touche ailleurs lance la partie.
+	var titles := [["CARNET", journal_pressed], ["GARAGE", garage_pressed],
+			["NUIT DU JOUR", daily_pressed], ["RÉGLAGES", settings_pressed]]
+	for i in titles.size():
+		var b := Button.new()
+		b.text = titles[i][0]
+		b.focus_mode = Control.FOCUS_NONE
+		b.position = Vector2(14 + (i % 2) * 124, 404 + (i / 2) * 34)
+		b.size = Vector2(118, 28)
+		b.add_theme_font_override("font", arcade_font())
+		b.add_theme_font_size_override("font_size", 8)
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(0.06, 0.03, 0.1, 0.85)
+		style.border_color = PINK * Color(1, 1, 1, 0.7)
+		style.set_border_width_all(1)
+		style.set_corner_radius_all(4)
+		for state in ["normal", "hover", "pressed"]:
+			b.add_theme_stylebox_override(state, style)
+		var sig: Signal = titles[i][1]
+		b.pressed.connect(func() -> void: sig.emit())
+		_overlay_logo.add_child(b)
 	_label(_overlay_logo, "ROUTE", logo_font(), 40, AMBER, Vector2(0, 80), HORIZONTAL_ALIGNMENT_CENTER, true, false, 0)
 	_label(_overlay_logo, "DE NUIT", logo_font(), 30, PINK, Vector2(0, 132), HORIZONTAL_ALIGNMENT_CENTER, true, false, 0)
 	_overlay_title = _label(_overlay, "", arcade_font(), 18, AMBER, Vector2(0, 166), HORIZONTAL_ALIGNMENT_CENTER, true)
@@ -215,6 +247,17 @@ func _ready() -> void:
 	_overlay_body.offset_right = -26.0
 	_overlay_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_overlay_hint = _label(_overlay, "", arcade_font(), 9, AMBER, Vector2(0, -92), HORIZONTAL_ALIGNMENT_CENTER, true, true)
+	_title_button = Button.new()
+	_title_button.text = "TITRE"
+	_title_button.focus_mode = Control.FOCUS_NONE
+	_title_button.position = Vector2(105, 430)
+	_title_button.size = Vector2(60, 24)
+	_title_button.add_theme_font_override("font", arcade_font())
+	_title_button.add_theme_font_size_override("font_size", 8)
+	_title_button.flat = true
+	_title_button.add_theme_color_override("font_color", DIM)
+	_title_button.pressed.connect(func() -> void: title_pressed.emit())
+	_overlay.add_child(_title_button)
 	_overlay.visible = false
 
 
@@ -233,7 +276,10 @@ func _process(delta: float) -> void:
 
 
 ## Une réplique de Radio Nuit, tapée lettre à lettre puis effacée.
-func radio(text: String) -> void:
+func radio(text: String, header: String = Scenario.STATION) -> void:
+	# Radio Nuit en rose ; les messages de Lou en bleu, comme un écran de téléphone.
+	_radio_header.text = header
+	_radio_header.label_settings.font_color = PINK if header == Scenario.STATION else LOU_BLUE
 	_radio_full = text
 	_radio_shown = 0.0
 	_radio_text.text = ""
@@ -311,6 +357,7 @@ func popup(text: String, color: Color = AMBER, size: int = 16, y: float = 170.0)
 func show_overlay(title: String, body: String, hint: String, logo := false) -> void:
 	_overlay.visible = true
 	_overlay_logo.visible = logo
+	_title_button.visible = not logo
 	_play.visible = not logo
 	_panel.visible = not logo
 	_overlay_title.text = title

@@ -37,6 +37,28 @@ const RADIO := {
 	"tunnel": "Ce tunnel est trop long. Le temps s'est arrêté, on dirait. Profitez-en.",
 }
 
+## Messages vocaux de Lou, un par tronçon : reçus à la station qui le termine
+## (à l'aube pour la dernière étape), gardés dans le carnet de route. Dix ans de
+## messages jamais écoutés ; ils se lisent dans n'importe quel ordre.
+const LOU_HEADER := "MESSAGE VOCAL — LOU"
+const LOU := {
+	"autoroute": "C'est moi. Je sais qu'il est tard. Rappelle si tu veux. Ou ne rappelle pas. Mais viens.",
+	"foret": "Tu te souviens de la cabane dans la forêt ? Nos noms gravés sous le plancher. Ils y sont encore.",
+	"port": "J'ai travaillé au port, la première année. Je regardais partir les bateaux en pensant à toi.",
+	"lac": "Le lac a gelé cet hiver. J'ai marché dessus jusqu'au milieu. J'avais envie de te le raconter.",
+	"faubourgs": "J'habite là, maintenant. Troisième fenêtre allumée. Je la laisse allumée exprès, au cas où.",
+	"usines": "Papa disait que le feu des usines, c'est la nuit qui respire. Tu ne l'as jamais entendu le dire.",
+	"cote": "J'ai trouvé un coquillage percé, comme ceux qu'on enfilait sur un fil. Je l'ai gardé pour toi.",
+	"periph": "Dix ans que je tourne en rond, comme sur ce périphérique. J'attendais que tu prennes la sortie.",
+	"vallee": "Ce qu'on s'est dit au barrage... Je l'ai pensé une seconde. Pas plus. Je te le jure.",
+	"col": "Je suis montée au col avec la voiture de papa. Il neigeait. Tu aurais adoré ça.",
+	"dunes": "Si tu entends la mer derrière ma voix, c'est que je suis déjà là. Prends ton temps. Pas trop.",
+	"centre": "Un café ouvre à cinq heures, au centre. J'y commanderai deux tasses.",
+	"retenue": "L'eau est si calme ce soir. On dirait qu'elle attend, elle aussi.",
+	"tunnels": "Dans les tunnels, la radio coupe. Alors je t'appelle maintenant, avant.",
+	"blanche": "Ce message, je ne l'ai pas encore laissé. Tu l'entends quand même. Ne demande pas comment.",
+}
+
 ## Les cinq fins : [titre, texte]. %s : détail qui dépend des événements vus.
 const ENDINGS := [
 	["LA MER", "Le soleil sort de l'eau. Sur la plage, une silhouette en ciré jaune. Lou se retourne. « Tu as mis le temps. » Vous riez tous les deux. Dix ans, ça s'efface en une phrase.%s"],

@@ -25,6 +25,7 @@ func _initialize() -> void:
 	_test_events_and_story()
 	await _test_audio_and_double_tap()
 	await _test_turbo()
+	_test_save_and_garage()
 	await _test_thumb_input()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -691,3 +692,53 @@ func _test_turbo() -> void:
 	_check(swipes[0] == 1, "turbo : tourner ne déclenche rien")
 	input.queue_free()
 	await process_frame
+
+
+# --- Sauvegarde, garage, carnet -------------------------------------------------------
+
+func _test_save_and_garage() -> void:
+	var path := "user://test_save.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	var s := SaveData.load_or_new(path)
+	_check(s.best == 0 and s.credits == 0 and s.unlocked_colors() == [0], "sauvegarde : neuve et vide")
+	s.credits = SaveData.credits_for(150000)
+	_check(s.credits == 1500, "garage : 1 crédit tous les 100 points", str(s.credits))
+	_check(s.buy_upgrade("moteur") and s.upgrades["moteur"] == 1 and s.credits == 300, "garage : achat d'un niveau")
+	_check(not s.buy_upgrade("moteur"), "garage : pas d'achat sans les crédits")
+	_check(s.record_ending(2, 90000) and not s.record_ending(2, 80000) and s.endings[2] == 90000,
+			"carnet : une fin découverte garde son record")
+	_check(s.unlocked_colors() == [0, 3], "garage : chaque fin débloque sa teinte", str(s.unlocked_colors()))
+	s.messages["lac"] = true
+	s.write()
+	var r := SaveData.load_or_new(path)
+	_check(r.upgrades["moteur"] == 1 and r.endings[2] == 90000 and r.messages.has("lac") and r.credits == 300,
+			"sauvegarde : tout est relu à l'identique")
+	# Les améliorations restent modestes et vont dans le bon sens.
+	var car := CarPhysics.new()
+	var g := GameRun.new()
+	for k in r.upgrades:
+		r.upgrades[k] = Garage.MAX_LEVEL
+	Garage.apply(r, car, g)
+	_check(car.upgrade_top > 1.0 and car.upgrade_top <= 1.05 and car.steer_mult > 1.0 and car.grip < 1.0
+			and car.crash_keep > 0.0 and g.turbo_gain > 1.0, "garage : améliorations au maximum, gains modestes")
+	# Chaque tronçon a son message de Lou, et chaque texte s'affiche avec nos polices.
+	var missing := []
+	for stage in RouteMap.STAGES:
+		for id in stage:
+			if not Scenario.LOU.has(id):
+				missing.append(id)
+	_check(missing.is_empty(), "Lou : un message par tronçon", str(missing))
+	var bad := ""
+	# Tous les textes en dur du carnet et du garage aussi.
+	var menu_src := FileAccess.get_file_as_string("res://scripts/menus.gd") + FileAccess.get_file_as_string("res://scripts/garage.gd")
+	var literals := []
+	var rx := RegEx.create_from_string("\"([^\"]*)\"")
+	for m in rx.search_all(menu_src):
+		literals.append(m.get_string(1))
+	for txt in Scenario.LOU.values() + Menus.EVENT_NAMES.values() + [Scenario.LOU_HEADER] + literals:
+		for ch in txt:
+			for font in [Hud.arcade_font(), Hud.text_font(), Hud.text_font(true)]:
+				if not font.has_char(ch.unicode_at(0)) and not bad.contains(ch):
+					bad += ch
+	_check(bad == "", "polices : messages et carnet affichables", bad)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

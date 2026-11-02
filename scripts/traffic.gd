@@ -239,7 +239,7 @@ func _contact(v: Vehicle, car: CarPhysics) -> String:
 		var side := signf(dx) if absf(dx) > 0.05 else 1.0
 		if ds > 0.0:
 			# Par l'arrière : on repart à la vitesse du véhicule, écarté sur le côté.
-			car.speed = minf(car.speed, v.speed * CRASH_SPEED_FACTOR)
+			car.speed = minf(car.speed, v.speed * (CRASH_SPEED_FACTOR + car.crash_keep))
 			car.s = minf(car.s, v.s - reach_s - 0.05)
 		car.lateral = side * 5.0
 		car.x = clampf(v.x + side * (reach_x + 0.05), -CarPhysics.RAIL + CarPhysics.CAR_HALF_WIDTH,

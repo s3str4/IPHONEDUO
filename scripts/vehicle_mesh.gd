@@ -19,11 +19,15 @@ const HALF_WIDTH := {Kind.SPORT: 0.95, Kind.SEDAN: 0.95, Kind.TRUCK: 1.25}
 
 ## Halos du véhicule en cours de construction.
 static var _halo: SurfaceTool
+static var _options := {}
 
 
 ## Construit le maillage d'un véhicule. `beam` : faisceau des phares au sol.
+## options (sportive du joueur) : "aileron" (bool), "jantes" (bool, chromées),
+## "neon" (Color, néon sous caisse).
 static func build(kind: Kind, color: Color, body_material: Material, glow_material: Material,
-		beam := false, lights := true) -> ArrayMesh:
+		beam := false, lights := true, options := {}) -> ArrayMesh:
+	_options = options
 	var body := SurfaceTool.new()
 	body.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var glow := SurfaceTool.new()
@@ -97,6 +101,37 @@ static func _sport(body: SurfaceTool, glow: SurfaceTool, color: Color) -> void:
 	for side in [-1.0, 1.0]:
 		Halo.add(_halo, Vector3(side * 0.7, 0.71, 2.42), 0.7, TAIL_COLOR, 0.5)
 	_round_wheels(body, 0.92, [-1.45, 1.5])
+	# Lame avant et diffuseur arrière à ailettes, noirs.
+	var trim := Color(0.03, 0.03, 0.035, 0.4)
+	_box(body, Vector3(0.0, 0.31, -2.2), Vector3(1.6, 0.05, 0.25), trim)
+	_box(body, Vector3(0.0, 0.33, 2.2), Vector3(1.7, 0.12, 0.3), trim)
+	for k in 5:
+		_box(body, Vector3(-0.6 + k * 0.3, 0.38, 2.24), Vector3(0.03, 0.12, 0.28), trim)
+	if _options.get("aileron", false):
+		# Aileron : deux montants et un plan profilé au-dessus du capot arrière.
+		for side in [-1.0, 1.0]:
+			_box(body, Vector3(side * 0.62, 1.0, 2.02), Vector3(0.06, 0.2, 0.16), trim)
+		_prism(body, [
+			Vector3(-0.95, 1.08, 1.86), Vector3(0.95, 1.08, 1.86), Vector3(0.95, 1.11, 2.2), Vector3(-0.95, 1.11, 2.2),
+			Vector3(-0.95, 1.13, 1.9), Vector3(0.95, 1.13, 1.9), Vector3(0.95, 1.2, 2.22), Vector3(-0.95, 1.2, 2.22)],
+			color)
+		for side in [-1.0, 1.0]:
+			_box(body, Vector3(side * 0.96, 1.12, 2.05), Vector3(0.02, 0.18, 0.42), trim)
+	if _options.has("neon"):
+		# Néon sous caisse : une nappe lumineuse au sol, qui s'éteint vers les bords.
+		var neon: Color = _options["neon"]
+		for half in [[-1.25, 0.0], [0.0, 1.25]]:
+			for zr in [[-2.6, 0.0], [0.0, 2.6]]:
+				var x0: float = half[0]
+				var x1: float = half[1]
+				var z0: float = zr[0]
+				var z1: float = zr[1]
+				var p := [Vector3(x0, 0.04, z0), Vector3(x0, 0.04, z1), Vector3(x1, 0.04, z1), Vector3(x1, 0.04, z0)]
+				for i in [0, 1, 2, 0, 2, 3]:
+					var edge := absf(p[i].x) > 1.0 or absf(p[i].z) > 2.0
+					glow.set_color(Color(neon.r, neon.g, neon.b, 0.9))
+					glow.set_uv(Vector2(0, 0.0 if edge else 1.0))
+					glow.add_vertex(p[i])
 
 
 ## Section de coque : bas de caisse, flanc, épaulement arrondi, dessus bombé.
@@ -165,11 +200,12 @@ static func _round_wheels(body: SurfaceTool, x: float, zs: Array) -> void:
 						body.set_color(TYRE_COLOR)
 						body.set_normal(Vector3(signf(side), 0, 0))
 						body.add_vertex(v)
-					# Jante : un disque plus petit, gris métal, côté extérieur.
+					# Jante : un disque plus petit, gris métal (ou chromé), côté extérieur.
 					if side * wx > 0.0:
 						var r := Vector3(signf(side) * 0.01, 0, 0)
+						var rim := Color(0.7, 0.72, 0.78, 1.0) if _options.get("jantes", false) else Color(0.2, 0.2, 0.22, 0.8)
 						for v in [c + o + r, c + o + r + p0 * 0.62, c + o + r + p1 * 0.62]:
-							body.set_color(Color(0.2, 0.2, 0.22, 0.8))
+							body.set_color(rim)
 							body.set_normal(Vector3(signf(side), 0, 0))
 							body.add_vertex(v)
 				var n := (p0 + p1).normalized()

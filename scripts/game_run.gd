@@ -40,6 +40,9 @@ var clock_frozen := false
 var turbo := 0.0
 var turbo_left := 0.0
 var turbos_fired := 0
+## Améliorations du garage : vitesse de charge et durée du turbo.
+var turbo_gain := 1.0
+var turbo_duration := RunConfig.TURBO_DURATION
 
 var _clean_from := 0.0
 var _last_s := 0.0
@@ -124,7 +127,7 @@ func update(s: float, x: float, drifting: bool, delta: float) -> void:
 func charge_turbo(amount: float) -> void:
 	if state != State.RUNNING or turbo >= 1.0:
 		return
-	turbo = minf(1.0, turbo + amount)
+	turbo = minf(1.0, turbo + amount * turbo_gain)
 	if turbo >= 1.0:
 		turbo_ready.emit()
 
@@ -139,7 +142,7 @@ func fire_turbo() -> bool:
 	if state != State.RUNNING or turbo < 1.0:
 		return false
 	turbo = 0.0
-	turbo_left = RunConfig.TURBO_DURATION
+	turbo_left = turbo_duration
 	turbos_fired += 1
 	turbo_fired.emit()
 	return true

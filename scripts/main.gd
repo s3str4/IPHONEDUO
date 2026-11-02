@@ -1,3 +1,4 @@
+class_name Main
 extends Node3D
 ## Une nuit jusqu'à l'aube : cinq étapes, quatre bifurcations, quinze
 ## ambiances, des événements étranges, Radio Nuit et cinq fins.
@@ -11,6 +12,7 @@ extends Node3D
 ##   --showcase         écran de titre sans interface (captures de la voiture)
 ##   --fps              affiche les images par seconde (essais sur iPhone)
 ##   --sliced           construit la route par étapes, comme la version web
+##   --menu=garage      ouvre un écran du titre (garage, carnet, reglages)
 ## Dans la version web, les mêmes options passent par l'adresse : ?fps&seed=3
 ##   --capture=PATH     enregistre une image PNG puis quitte
 ##   --capture_at=SEC   instant de la capture (défaut 6)
@@ -19,7 +21,6 @@ const CHUNKS_BEHIND := 1
 const CHUNKS_AHEAD := 4
 const CAMERA_BACK := 8.0
 const CAMERA_HEIGHT := 4.2
-const SAVE_PATH := "user://save.cfg"
 const START_S := 30.0
 
 const NIGHT_FOG := Color(0.05, 0.06, 0.12)
@@ -35,6 +36,18 @@ const FORK_PROMPT := 1200.0
 
 ## Rejouer depuis l'écran de fin saute l'écran de titre.
 static var quick_restart := false
+## Nuit du jour : même route et même trafic pour tout le monde ce jour-là.
+static var daily_mode := false
+
+
+## Date du jour, « AAAA-MM-JJ ».
+static func today() -> String:
+	return Time.get_date_string_from_system()
+
+
+## Graine de la nuit du jour, tirée de la date.
+static func daily_seed() -> int:
+	return absi(hash("route-de-nuit-" + today())) % 1000000 + 1
 
 var track: Track
 var builder: RoadBuilder
@@ -63,13 +76,13 @@ var _time := 0.0
 var _shake := 0.0
 var _cam_x := 0.0
 var _end_time := 0.0
-var _best := 0
 var _sky_material: ShaderMaterial
 var _post_material: ShaderMaterial
 var _events: EventDirector
 var _path := [0, 0, 0, 0]
-var _runs := 0
-var _endings_seen := {}
+## Tout ce qui survit d'une partie à l'autre.
+var save: SaveData
+var menus: Menus
 ## File de Radio Nuit : [texte, s au-delà duquel la réplique n'a plus de sens].
 var _radio_queue := []
 var _low_time_said := false
@@ -111,13 +124,14 @@ func _ready() -> void:
 		_args[kv[0]] = kv[1] if kv.size() > 1 else "true"
 	if _args.has("sliced"):
 		_sliced = true
-	var seed := int(_args.get("seed", "1"))
+	var seed := daily_seed() if daily_mode else int(_args.get("seed", "1"))
 	if _args.has("path"):
 		_path.clear()
 		for c in str(_args["path"]):
 			_path.append(int(c))
-	_load_save()
-	_events = EventDirector.new(seed, _runs)
+	save = SaveData.load_or_new()
+	_tutorial_done = save.runs > 0
+	_events = EventDirector.new(seed, save.runs)
 	track = Track.new(seed, true)
 	builder = RoadBuilder.new(track, seed)
 	builder.stations = RunConfig.stations()
@@ -126,7 +140,7 @@ func _ready() -> void:
 	_worker_builder = RoadBuilder.new(Track.new(seed, true), seed)
 	_worker_builder.stations = builder.stations
 	_worker_builder.arrival_s = builder.arrival_s
-	_worker_builder.events = EventDirector.new(seed, _runs)
+	_worker_builder.events = EventDirector.new(seed, save.runs)
 	# Ressources partagées créées ici, avant toute tâche de fond.
 	Hud.arcade_font()
 	Halo.material()
@@ -136,8 +150,30 @@ func _ready() -> void:
 	_lights = LightField.new()
 	reflection.source = camera
 	# Navigateur : reflet plus petit, Safari sur iPhone est moins rapide que l'app.
-	if OS.has_feature("web"):
-		reflection.scale = 0.35
+	menus = Menus.new()
+	menus.save = save
+	add_child(menus)
+	menus.settings_changed.connect(_apply_settings)
+	menus.color_chosen.connect(func(i: int) -> void:
+		car_view.set_paint(i)
+		_write_save())
+	menus.closed.connect(func() -> void: _write_save())
+	hud.journal_pressed.connect(menus.open_journal)
+	hud.garage_pressed.connect(menus.open_garage)
+	menus.garage_changed.connect(func() -> void:
+		_apply_garage()
+		_write_save())
+	hud.title_pressed.connect(func() -> void:
+		get_tree().paused = false
+		daily_mode = false
+		quick_restart = false
+		get_tree().reload_current_scene())
+	hud.settings_pressed.connect(menus.open_settings)
+	hud.daily_pressed.connect(func() -> void:
+		daily_mode = true
+		quick_restart = true
+		get_tree().reload_current_scene())
+
 	if _args.has("fps"):
 		_fps_label = Label.new()
 		_fps_label.position = Vector2(8, 452)
@@ -145,6 +181,8 @@ func _ready() -> void:
 		hud.add_child(_fps_label)
 	audio = AudioDirector.new()
 	add_child(audio)
+	_apply_garage()
+	_apply_settings()
 	input.double_tapped.connect(func() -> void: hud.popup(audio.next_station(), Hud.PINK, 12, 250.0))
 	hud.pause_pressed.connect(_set_paused.bind(true))
 	input.swiped_up.connect(_try_turbo)
@@ -185,9 +223,19 @@ func _ready() -> void:
 		_start()
 	else:
 		hud.show_overlay("",
-				"Une nuit. Une route.\nAtteins l'aube\navant la fin du chrono.\n\nRECORD %s\nFINS %d/%d" % [
-					Hud._group(_best), _endings_seen.size(), RouteMap.ENDINGS.size()],
+				"Atteins l'aube avant la fin du chrono.\nRECORD %s   |   FINS %d/%d" % [
+					Hud._group(save.best), save.endings.size(), RouteMap.ENDINGS.size()],
 				"POSE TON POUCE", true)
+	# Captures : ouvrir directement un écran du titre (--menu=garage, carnet, reglages).
+	match str(_args.get("menu", "")):
+		"garage":
+			menus.open_garage()
+		"carnet":
+			menus.open_journal()
+		"reglages":
+			menus.open_settings()
+	if daily_mode and not _args.has("autopilot"):
+		hud.popup("NUIT DU %s" % today().substr(8, 2) + "/" + today().substr(5, 2), Hud.LOU_BLUE, 12, 260.0)
 	_update_chunks(true)
 	_place_car_and_camera(0.0)
 
@@ -243,11 +291,36 @@ func _first_lamp_after(s: float) -> float:
 	return s
 
 
+## Améliorations et options du garage, sur la voiture et dans les règles.
+func _apply_garage() -> void:
+	Garage.apply(save, car, game)
+	var options := {"aileron": save.owned.has("aileron") and save.spoiler_on, "jantes": save.owned.has("jantes")}
+	if save.owned.has("neon") and save.neon_on:
+		options["neon"] = Garage.NEON_COLORS[save.neon_color]
+	car_view.set_options(options)
+	car_view.set_paint(save.car_color)
+
+
+## Volumes, sensibilité du pouce, qualité graphique (réglages sauvegardés).
+func _apply_settings() -> void:
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Musique"), linear_to_db(maxf(save.music_volume, 0.0001)))
+	AudioServer.set_bus_volume_db(AudioServer.get_bus_index("Bruitages"), linear_to_db(maxf(save.sfx_volume, 0.0001)))
+	input.steer_range = 0.16 / save.sensitivity
+	# Sobre : pas de reflet ; normale : reflet réduit ; haute : reflet à mi-résolution
+	# (réduit quand même dans le navigateur).
+	var on := save.quality > 0
+	reflection.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
+	RenderingServer.global_shader_parameter_set("reflection_on", 1.0 if on else 0.0)
+	reflection.scale = 0.5 if save.quality == 2 and not OS.has_feature("web") else 0.35
+
+
 func _start() -> void:
+	if menus.is_open():
+		return
 	hud.hide_overlay()
 	game.start(car.s)
 	if not _args.has("autopilot"):
-		_runs += 1
+		save.runs += 1
 		_write_save()
 	if car.s < RouteMap.region_start(1):
 		_say(Scenario.RADIO["start"])
@@ -264,7 +337,7 @@ func _sync_choices() -> void:
 ## Ajoute une réplique à la file de Radio Nuit ; elle est oubliée si la
 ## voiture a passé `until_s` avant qu'elle ait pu passer à l'antenne.
 func _say(text: String, until_s := INF) -> void:
-	_radio_queue.append([text, until_s])
+	_radio_queue.append([text, until_s, Scenario.STATION])
 
 
 func _physics_process(delta: float) -> void:
@@ -330,7 +403,7 @@ func _process(delta: float) -> void:
 	traffic_view.sync(traffic, track)
 	car_view.set_lighting(builder.lamp_light(car.s, car.x), input.throttle == 0.0 and not _args.has("autopilot"), delta)
 	hud.set_values(game.time_left, game.score, game.segment(), game.multiplier(), car.speed_kmh(), game.progress())
-	hud.set_turbo(game.turbo, game.turbo_left / RunConfig.TURBO_DURATION)
+	hud.set_turbo(game.turbo, game.turbo_left / game.turbo_duration)
 	_update_dawn()
 	_update_weather(delta)
 	_update_lighting(delta)
@@ -343,7 +416,7 @@ func _process(delta: float) -> void:
 	while not _radio_queue.is_empty() and not hud.radio_busy():
 		var line: Array = _radio_queue.pop_front()
 		if car.s < line[1]:
-			hud.radio(line[0])
+			hud.radio(line[0], line[2])
 			audio.play("static", -16.0)
 	var cur := int(floor(car.s / RoadBuilder.CHUNK_LENGTH))
 	for i in range(cur, cur + 3):
@@ -371,7 +444,12 @@ func _update_dawn() -> void:
 ## Lumières proches, phares, reflet de la route, effets de vitesse.
 func _update_lighting(delta: float) -> void:
 	var cam := camera.global_position
-	_lights.update(builder.light_sources(car.s - 60.0, car.s + 300.0), cam, delta)
+	var sources := builder.light_sources(car.s - 60.0, car.s + 300.0)
+	# Le néon sous caisse éclaire la chaussée (et se reflète dedans).
+	var neon := car_view.neon_color()
+	if neon != Color.BLACK:
+		sources.append([car_view.global_position + Vector3.UP * 0.25, neon, 7.0, 3.0])
+	_lights.update(sources, cam, delta)
 	var t := track.transform_at(car.s, car.x)
 	var fwd := -car_view.global_transform.basis.z
 	RenderingServer.global_shader_parameter_set("head_pos", car_view.global_position + fwd * 2.1 + t.basis.y * 0.7)
@@ -445,6 +523,12 @@ func _update_events() -> void:
 func _on_station(index: int, added: float) -> void:
 	hud.popup("+%d" % int(added), Hud.AMBER, 32, 140.0)
 	hud.popup("STATION %d" % (index + 1), Hud.WHITE, 8, 188.0)
+	# À chaque station, un message de Lou attend sur le répondeur.
+	var region := RouteMap.theme_id(index, game.choices)
+	var fresh := _collect_message(region)
+	_radio_queue.push_front([Scenario.LOU[region], INF,
+			("NOUVEAU — " if fresh else "") + Scenario.LOU_HEADER])
+	_write_save()
 
 
 func _on_fork(_index: int, _side: int) -> void:
@@ -460,54 +544,67 @@ func _on_region(_stage: int, theme_id: String) -> void:
 func _on_arrived(bonus: int) -> void:
 	_end_time = _time
 	var record := _save_best(int(game.score))
-	var first_time := not _endings_seen.has(game.ending)
-	_endings_seen[game.ending] = true
+	var first_time := not _args.has("autopilot") and save.record_ending(game.ending, int(game.score))
+	# Le dernier message de Lou arrive avec l'aube.
+	var last_region := RouteMap.theme_id(RouteMap.STAGES.size() - 1, game.choices)
+	var lou := "%s\n« %s »" % [Scenario.LOU_HEADER, Scenario.LOU[last_region]]
+	_collect_message(last_region)
+	for f in game.flags:
+		save.events_seen[f] = true
+	var earned := _earn_credits()
 	_write_save()
 	hud.show_overlay(RouteMap.ENDINGS[game.ending],
-			"%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/6\n%s" % [
-				Scenario.ending_text(game.ending, game.flags),
+			"%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/6\n%s\n+%s CRÉDITS%s" % [
+				Scenario.ending_text(game.ending, game.flags), lou,
 				"NOUVELLE FIN ! " if first_time else "", Hud._group(int(game.score)), Hud._group(bonus),
-				game.flags.size(), "NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(_best)],
+				game.flags.size(), "NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(save.best),
+				Hud._group(earned), "  —  nouvelle teinte au garage" if first_time else ""],
 			"TOUCHE POUR REJOUER")
 
 
 func _on_time_up() -> void:
 	_end_time = _time
 	var record := _save_best(int(game.score))
+	for f in game.flags:
+		save.events_seen[f] = true
+	var earned := _earn_credits()
+	_write_save()
 	hud.show_overlay("LA NUIT\nGAGNE",
-			"\nÉTAPE %d SUR %d\n%.1f KM\n\nSCORE %s\n\n%s" % [
+			"\nÉTAPE %d SUR %d\n%.1f KM\n\nSCORE %s\n\n%s\n+%s CRÉDITS" % [
 				game.segment() + 1, RunConfig.SEGMENT_COUNT, car.s / 1000.0, Hud._group(int(game.score)),
-				"NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(_best)],
+				"NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(save.best), Hud._group(earned)],
 			"TOUCHE POUR REJOUER")
 
 
-## Sauvegarde : record, parties jouées, fins découvertes.
-func _load_save() -> void:
-	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
-		return
-	_best = int(cfg.get_value("scores", "best", 0))
-	_runs = int(cfg.get_value("progress", "runs", 0))
-	_tutorial_done = _runs > 0
-	for e in cfg.get_value("progress", "endings", []):
-		_endings_seen[int(e)] = true
+## Crédits de fin de partie (et record de la nuit du jour) ; renvoie le gain.
+func _earn_credits() -> int:
+	if _args.has("autopilot"):
+		return 0
+	var earned := SaveData.credits_for(int(game.score))
+	save.credits += earned
+	if daily_mode:
+		save.daily[today()] = maxi(int(save.daily.get(today(), 0)), int(game.score))
+	return earned
+
+
+## Garde un message de Lou dans le carnet ; renvoie vrai s'il est nouveau.
+func _collect_message(theme_id: String) -> bool:
+	if _args.has("autopilot") or save.messages.has(theme_id):
+		return false
+	save.messages[theme_id] = true
+	return true
 
 
 func _write_save() -> void:
-	if _args.has("autopilot"):
-		return
-	var cfg := ConfigFile.new()
-	cfg.set_value("scores", "best", _best)
-	cfg.set_value("progress", "runs", _runs)
-	cfg.set_value("progress", "endings", _endings_seen.keys())
-	cfg.save(SAVE_PATH)
+	if not _args.has("autopilot"):
+		save.write()
 
 
 ## Enregistre le score s'il bat le record ; renvoie vrai si c'est un record.
 func _save_best(score: int) -> bool:
-	if score <= _best or _args.has("autopilot"):
+	if score <= save.best or _args.has("autopilot"):
 		return false
-	_best = score
+	save.best = score
 	_write_save()
 	return true
 
@@ -599,9 +696,13 @@ func _place_car_and_camera(delta: float) -> void:
 
 	if game.state == GameRun.State.WAITING:
 		# Écran de titre : la caméra tourne lentement autour de la voiture arrêtée.
+		# Au garage, la voiture remonte dans la moitié haute, au-dessus du panneau.
+		var garage := menus != null and menus.current == "garage"
+		hud.visible = menus == null or menus.current == "" and not _args.has("showcase")
 		var a := _time * 0.25 + 2.2
-		var orbit := t.origin + t.basis * Vector3(sin(a) * 6.5, 1.7, cos(a) * 6.5)
-		camera.look_at_from_position(orbit, t.origin + t.basis.y * 0.8, Vector3.UP)
+		var radius := 8.0 if garage else 6.5
+		var orbit := t.origin + t.basis * Vector3(sin(a) * radius, 1.7, cos(a) * radius)
+		camera.look_at_from_position(orbit, t.origin + t.basis.y * (-1.9 if garage else 0.8), Vector3.UP)
 		camera.fov = 62.0
 		return
 
