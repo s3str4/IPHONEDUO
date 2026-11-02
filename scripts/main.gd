@@ -187,6 +187,8 @@ func _ready() -> void:
 	_sky_material = environment.sky.sky_material
 	_ambient_base = ProjectSettings.get_setting("shader_globals/sky_ambient")["value"]
 	_post_material = $Post/Screen.material
+	if _args.has("nopost"):
+		$Post.visible = false
 	_lights = LightField.new()
 	reflection.source = camera
 	# Navigateur : reflet plus petit, Safari sur iPhone est moins rapide que l'app.
@@ -376,7 +378,27 @@ func _apply_settings() -> void:
 	var on := save.quality > 0
 	reflection.render_target_update_mode = SubViewport.UPDATE_ALWAYS if on else SubViewport.UPDATE_DISABLED
 	RenderingServer.global_shader_parameter_set("reflection_on", 1.0 if on else 0.0)
-	reflection.scale = 0.5 if save.quality == 2 and not OS.has_feature("web") else 0.35
+	# Netteté : l'interface s'affiche à la résolution de l'écran (nette), la 3D
+	# à une résolution réglable, agrandie ensuite (le vrai coût est là).
+	var s3d := render_scale()
+	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
+	get_viewport().scaling_3d_scale = s3d
+	reflection.scale = (0.5 if save.quality == 2 and not OS.has_feature("web") else 0.35) * s3d
+
+
+## Hauteur visée de l'image 3D (pixels) selon la qualité ; sur ordinateur et en
+## capture, pleine résolution. --render_h=N force une hauteur (essais).
+const RENDER_HEIGHT := [720, 860, 1000]
+
+
+func render_scale() -> float:
+	var h := float(DisplayServer.window_get_size().y)
+	var target := float(_args.get("render_h", "0"))
+	if target <= 0.0:
+		if not OS.has_feature("web"):
+			return 1.0
+		target = RENDER_HEIGHT[save.quality]
+	return clampf(target / maxf(h, 1.0), 0.25, 1.0)
 
 
 func _start() -> void:
@@ -500,7 +522,7 @@ func _process(delta: float) -> void:
 	hud.set_turbo(game.turbo, game.turbo_left / game.turbo_duration)
 	_update_dawn()
 	_update_ending(delta)
-	_sky_material.set_shader_parameter("pixel_angle", deg_to_rad(camera.fov) / maxf(1.0, get_viewport().get_texture().get_size().y))
+	_sky_material.set_shader_parameter("pixel_angle", deg_to_rad(camera.fov) / maxf(1.0, DisplayServer.window_get_size().y * get_viewport().scaling_3d_scale))
 	_update_weather(delta)
 	_update_storm(delta)
 	_update_lighting(delta)

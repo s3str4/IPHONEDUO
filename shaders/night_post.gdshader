@@ -65,15 +65,21 @@ void fragment() {
 	float edge = dot(dir, dir);
 	float blur = speed * speed * 0.035 * edge * 4.0;
 	vec3 c = vec3(0.0);
+	// À l'arrêt ou au ralenti, pas de flou : une seule lecture au lieu de six
+	// (l'écran est grand sur iPhone, chaque lecture compte).
+	int taps = (speed > 0.05 || hit > 0.01) ? 6 : 1;
 	for (int i = 0; i < 6; i++) {
-		float k = float(i) / 5.0;
+		if (i >= taps) {
+			break;
+		}
+		float k = taps > 1 ? float(i) / 5.0 : 0.0;
 		vec2 o = dir * blur * k;
 		float ca = (speed * 0.004 + hit * 0.012) * edge * 4.0;
 		c.r += texture(screen_tex, uv - o * (1.0 + ca * 40.0) - dir * ca).r;
 		c.g += texture(screen_tex, uv - o).g;
 		c.b += texture(screen_tex, uv - o * (1.0 - ca * 40.0) + dir * ca).b;
 	}
-	c /= 6.0;
+	c /= float(taps);
 	c += vec3(0.55, 0.6, 0.7) * (a.z + b.z) * 0.3;
 	c += vec3(0.35, 0.12, 0.05) * hit * (0.3 + edge * 3.0);
 

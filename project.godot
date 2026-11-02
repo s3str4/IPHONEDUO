@@ -24,7 +24,7 @@ window/stretch/aspect="expand"
 window/handheld/orientation=1
 ; Navigateur (version web) : rendu à la résolution CSS, pas à celle de l'écran
 ; Retina (3× plus de pixels, trop lourd pour Safari sur iPhone).
-window/dpi/allow_hidpi.web=false
+window/dpi/allow_hidpi.web=true
 
 [input_devices]
 

@@ -62,6 +62,7 @@ var _pursuit_time := 0.0
 const SIREN_RED := Color(1.0, 0.25, 0.22)
 const SIREN_BLUE := Color(0.35, 0.55, 1.0)
 var _bars: Array[ColorRect] = []
+const BAR_H := 46.0
 var _paused := false
 
 ## Le bouton pause est touché ; une touche pendant la pause demande la reprise.
@@ -112,12 +113,17 @@ func _ready() -> void:
 	root.add_child(_shade(false))
 
 	# Bandes du plan de cinéma (scènes de fin), repliées hors écran.
+	# Ancrées aux vrais bords : sur un écran plus allongé que 270 × 480 (iPhone
+	# en plein écran), une bande placée « sous » y = 480 restait visible.
 	for top in [true, false]:
 		var bar := ColorRect.new()
 		bar.color = Color.BLACK
-		bar.size = Vector2(270, 46)
-		bar.position = Vector2(0, -46 if top else 480)
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.anchor_right = 1.0
+		bar.anchor_top = 0.0 if top else 1.0
+		bar.anchor_bottom = 0.0 if top else 1.0
+		bar.offset_top = -BAR_H if top else 0.0
+		bar.offset_bottom = 0.0 if top else BAR_H
 		root.add_child(bar)
 		_bars.append(bar)
 
@@ -486,8 +492,9 @@ func cinema(on: bool) -> void:
 	_cinema = on
 	_play.visible = not on
 	var tw := create_tween().set_parallel()
-	tw.tween_property(_bars[0], "position:y", 0.0 if on else -46.0, 1.2).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(_bars[1], "position:y", 434.0 if on else 480.0, 1.2).set_trans(Tween.TRANS_SINE)
+	var d := BAR_H if on else 0.0
+	for p in [["offset_top", -BAR_H + d, 0], ["offset_bottom", d, 0], ["offset_top", -d, 1], ["offset_bottom", BAR_H - d, 1]]:
+		tw.tween_property(_bars[p[2]], p[0], p[1], 1.2).set_trans(Tween.TRANS_SINE)
 
 
 func hide_overlay() -> void:
