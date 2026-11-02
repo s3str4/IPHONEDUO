@@ -27,6 +27,16 @@ const CHAIN_STEP := 0.25          # multiplicateur gagné par maillon de chaîne
 const MAX_MULTIPLIER := 5.0
 const CLEAN_DISTANCE := 1000.0    # mètres sans choc = un maillon
 
+# Turbo néon : jauge 0..1, déclenché d'un glissé du pouce vers le haut.
+const TURBO_PER_NEAR_MISS := 0.22
+const TURBO_PER_DRIFT_SECOND := 0.1
+const TURBO_PER_DRAFT_SECOND := 0.12
+const TURBO_PER_CHAIN := 0.08     # chaque maillon gagné en roulant propre
+const TURBO_DURATION := 3.5       # s
+const TURBO_SPEED := 1.18         # vitesse de pointe pendant le turbo
+const TURBO_ACCEL := 1.8
+const DRAFT_SPEED := 1.04         # aspiration : un peu plus de vitesse de pointe
+
 
 static func station_s(index: int) -> float:
 	return SEGMENT_LENGTH * (index + 1)

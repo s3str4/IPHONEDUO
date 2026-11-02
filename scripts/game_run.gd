@@ -13,6 +13,8 @@ signal arrived(time_bonus: int)
 signal time_up
 signal fork_taken(index: int, side: int)
 signal region_entered(stage: int, theme_id: String)
+signal turbo_ready
+signal turbo_fired
 
 ## Bonus de score selon la destination : les routes de droite sont plus dures.
 const ENDING_BONUS := [0, 5000, 10000, 15000, 25000]
@@ -34,6 +36,10 @@ var flags := {}
 var ending := -1
 ## Le chrono est suspendu (tunnel trop long).
 var clock_frozen := false
+## Jauge du turbo (0..1) et temps de turbo restant (s).
+var turbo := 0.0
+var turbo_left := 0.0
+var turbos_fired := 0
 
 var _clean_from := 0.0
 var _last_s := 0.0
@@ -72,11 +78,14 @@ func update(s: float, x: float, drifting: bool, delta: float) -> void:
 	score += travelled * RunConfig.POINTS_PER_METER * multiplier()
 	if drifting:
 		score += RunConfig.DRIFT_POINTS_PER_SECOND * delta * multiplier()
+		charge_turbo(RunConfig.TURBO_PER_DRIFT_SECOND * delta)
+	turbo_left = maxf(0.0, turbo_left - delta)
 	_last_s = s
 
 	if s - _clean_from >= RunConfig.CLEAN_DISTANCE:
 		_clean_from = s
 		chain += 1
+		charge_turbo(RunConfig.TURBO_PER_CHAIN)
 
 	while next_station < RunConfig.SEGMENT_COUNT - 1 and s >= RunConfig.station_s(next_station):
 		var added: float = RunConfig.STATION_TIME[next_station]
@@ -112,6 +121,34 @@ func update(s: float, x: float, drifting: bool, delta: float) -> void:
 		time_up.emit()
 
 
+func charge_turbo(amount: float) -> void:
+	if state != State.RUNNING or turbo >= 1.0:
+		return
+	turbo = minf(1.0, turbo + amount)
+	if turbo >= 1.0:
+		turbo_ready.emit()
+
+
+## Aspiration derrière un véhicule : charge le turbo.
+func on_draft(delta: float) -> void:
+	charge_turbo(RunConfig.TURBO_PER_DRAFT_SECOND * delta)
+
+
+## Déclenche le turbo si la jauge est pleine.
+func fire_turbo() -> bool:
+	if state != State.RUNNING or turbo < 1.0:
+		return false
+	turbo = 0.0
+	turbo_left = RunConfig.TURBO_DURATION
+	turbos_fired += 1
+	turbo_fired.emit()
+	return true
+
+
+func is_boosting() -> bool:
+	return turbo_left > 0.0
+
+
 func set_flag(name: String) -> void:
 	flags[name] = true
 
@@ -121,6 +158,7 @@ func on_near_miss() -> void:
 		return
 	near_misses += 1
 	chain += 1
+	charge_turbo(RunConfig.TURBO_PER_NEAR_MISS)
 	var pts := int(RunConfig.NEAR_MISS_POINTS * multiplier())
 	score += pts
 	near_miss.emit(pts)

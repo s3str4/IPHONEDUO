@@ -29,9 +29,9 @@ func _report(name: String, driver: Sim.Driver, path: Array) -> void:
 	for seed in range(1, SEEDS + 1):
 		var r := Sim.run(seed, driver, path)
 		var g: GameRun = r.game
-		print("%-18s graine %d : %-8s étape %d  temps %5.1f s  durée %5.1f s  moy %3d km/h  score %7d  frôlages %2d  trafic %2d  chocs %2d" % [
+		print("%-18s graine %d : %-8s étape %d  temps %5.1f s  durée %5.1f s  moy %3d km/h  score %7d  frôlages %2d  turbos %d  trafic %2d  chocs %2d" % [
 			name, seed, GameRun.State.keys()[g.state], g.segment() + 1, g.time_left, g.elapsed,
-			int(r.car.s / maxf(g.elapsed, 1.0) * 3.6), int(g.score), g.near_misses, r.traffic_crashes, r.car.rail_hits])
+			int(r.car.s / maxf(g.elapsed, 1.0) * 3.6), int(g.score), g.near_misses, g.turbos_fired, r.traffic_crashes, r.car.rail_hits])
 		if g.state == GameRun.State.ARRIVED:
 			arrivals += 1
 			margins.append(g.time_left)

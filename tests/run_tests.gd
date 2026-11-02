@@ -24,6 +24,7 @@ func _initialize() -> void:
 	_test_fork_traffic()
 	_test_events_and_story()
 	await _test_audio_and_double_tap()
+	await _test_turbo()
 	await _test_thumb_input()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -637,3 +638,56 @@ func _vertex_count(mi: MeshInstance3D) -> int:
 		for s in m.mesh.get_surface_count():
 			n += m.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX].size()
 	return n
+
+
+# --- Turbo néon ---------------------------------------------------------------
+
+func _test_turbo() -> void:
+	var g := GameRun.new()
+	g.start()
+	_check(not g.fire_turbo(), "turbo : impossible avec une jauge vide")
+	var ready := [false]
+	g.turbo_ready.connect(func() -> void: ready[0] = true)
+	for i in 5:
+		g.on_near_miss()
+	_check(ready[0] and is_equal_approx(g.turbo, 1.0), "turbo : les frôlages remplissent la jauge", "%.2f" % g.turbo)
+	_check(g.fire_turbo() and g.is_boosting() and g.turbo == 0.0, "turbo : déclenché, la jauge se vide")
+	g.update(10.0, 0.0, false, RunConfig.TURBO_DURATION + 0.1)
+	_check(not g.is_boosting(), "turbo : il s'arrête après sa durée")
+	# Sous turbo, la voiture dépasse sa vitesse de pointe puis y retombe en douceur.
+	var t := Track.new(1)
+	var car := CarPhysics.new()
+	car.speed = CarPhysics.TOP_SPEED
+	car.boost = RunConfig.TURBO_SPEED
+	car.accel_boost = RunConfig.TURBO_ACCEL
+	for i in 60 * 3:
+		car.step(t, 1.0, car.autopilot_steer(t, -4.0), 1.0 / 60.0)
+	var boosted := car.speed
+	car.boost = 1.0
+	car.accel_boost = 1.0
+	car.step(t, 1.0, 0.0, 1.0 / 60.0)
+	var after_one := car.speed
+	_check(boosted > CarPhysics.TOP_SPEED * 1.1, "turbo : vitesse de pointe relevée", "%.0f km/h" % (boosted * 3.6))
+	_check(after_one > CarPhysics.TOP_SPEED and after_one < boosted, "turbo : retombée progressive, pas brutale")
+	# Glissé vers le haut.
+	await process_frame
+	var input := ThumbInput.new()
+	root.add_child(input)
+	var swipes := [0]
+	input.swiped_up.connect(func() -> void: swipes[0] += 1)
+	var h := input.get_viewport().get_visible_rect().size.y
+	var touch := InputEventScreenTouch.new()
+	touch.pressed = true
+	touch.position = Vector2(100, h * 0.7)
+	input._unhandled_input(touch)
+	var drag := InputEventScreenDrag.new()
+	drag.position = Vector2(100, h * 0.55)
+	input._unhandled_input(drag)
+	drag.position = Vector2(100, h * 0.5)
+	input._unhandled_input(drag)
+	_check(swipes[0] == 1, "turbo : glisser vers le haut le déclenche, une seule fois", str(swipes[0]))
+	drag.position = Vector2(110, h * 0.68)
+	input._unhandled_input(drag)
+	_check(swipes[0] == 1, "turbo : tourner ne déclenche rien")
+	input.queue_free()
+	await process_frame

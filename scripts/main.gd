@@ -95,6 +95,8 @@ var _fps_label: Label
 var _tutorial_done := false
 var _tutorial_step := 0
 var _tutorial_fork := false
+var _turbo_explained := false
+var _turbo_fov := 0.0
 
 
 func _ready() -> void:
@@ -145,6 +147,12 @@ func _ready() -> void:
 	add_child(audio)
 	input.double_tapped.connect(func() -> void: hud.popup(audio.next_station(), Hud.PINK, 12, 250.0))
 	hud.pause_pressed.connect(_set_paused.bind(true))
+	input.swiped_up.connect(_try_turbo)
+	game.turbo_ready.connect(func() -> void:
+		audio.play("blip", -6.0, 1.4)
+		if not _turbo_explained:
+			_turbo_explained = true
+			hud.hint("TURBO PRÊT : GLISSE LE POUCE VERS LE HAUT"))
 	hud.resume_requested.connect(_set_paused.bind(false))
 	game.near_miss.connect(func(_p: int) -> void: audio.play("whoosh", -4.0, randf_range(0.9, 1.15)))
 	game.station_reached.connect(func(_i: int, _t: float) -> void: audio.play("chime", -6.0))
@@ -191,6 +199,13 @@ func _exit_tree() -> void:
 	if _pending != null:
 		_pending.free()
 		_pending = null
+
+
+func _try_turbo() -> void:
+	if game.fire_turbo():
+		audio.play("whoosh", 0.0, 0.6)
+		hud.popup("TURBO", Hud.PINK, 18, 200.0)
+		_shake = 0.2
 
 
 ## Pause : bouton, ou l'app passe en arrière-plan (appel, notification...).
@@ -264,6 +279,14 @@ func _physics_process(delta: float) -> void:
 		var cmd := Autopilot.drive(car, track, traffic, _path, Autopilot.Driver.GOOD)
 		throttle = cmd[0]
 		steer = cmd[1]
+		if cmd[2]:
+			_try_turbo()
+	# Turbo et aspiration.
+	var drafting := traffic.drafting(car)
+	if drafting and game.state == GameRun.State.RUNNING:
+		game.on_draft(delta)
+	car.boost = (RunConfig.TURBO_SPEED if game.is_boosting() else 1.0) * (RunConfig.DRAFT_SPEED if drafting else 1.0)
+	car.accel_boost = RunConfig.TURBO_ACCEL if game.is_boosting() else 1.0
 	if game.state != GameRun.State.RUNNING:
 		throttle = 0.0
 
@@ -307,6 +330,7 @@ func _process(delta: float) -> void:
 	traffic_view.sync(traffic, track)
 	car_view.set_lighting(builder.lamp_light(car.s, car.x), input.throttle == 0.0 and not _args.has("autopilot"), delta)
 	hud.set_values(game.time_left, game.score, game.segment(), game.multiplier(), car.speed_kmh(), game.progress())
+	hud.set_turbo(game.turbo, game.turbo_left / RunConfig.TURBO_DURATION)
 	_update_dawn()
 	_update_weather(delta)
 	_update_lighting(delta)
@@ -593,4 +617,6 @@ func _place_car_and_camera(delta: float) -> void:
 		_shake = maxf(0.0, _shake - delta)
 		eye += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * _shake * 0.25
 	camera.look_at_from_position(eye, target, Vector3.UP)
-	camera.fov = lerpf(60.0, 72.0, car.speed / CarPhysics.TOP_SPEED)
+	# Le champ s'ouvre avec la vitesse, et encore plus sous turbo.
+	_turbo_fov = lerpf(_turbo_fov, 9.0 if game.is_boosting() else 0.0, 1.0 - exp(-4.0 * delta) if delta > 0.0 else 1.0)
+	camera.fov = lerpf(60.0, 72.0, minf(car.speed / CarPhysics.TOP_SPEED, 1.0)) + _turbo_fov

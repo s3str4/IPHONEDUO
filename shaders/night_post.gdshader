@@ -6,7 +6,7 @@ shader_type canvas_item;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 // Densité des gouttes (0 = temps sec).
 uniform float rain = 1.0;
-// Vitesse de la voiture (0..1) : flou radial et aberration.
+// Vitesse de la voiture (0..1, plus sous turbo) : flou radial et aberration.
 uniform float speed = 0.0;
 uniform float vignette = 0.45;
 uniform float grain = 0.035;

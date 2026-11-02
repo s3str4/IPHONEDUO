@@ -12,6 +12,11 @@ extends Node
 
 ## Double tap (deux touches brèves) : changer de station de radio.
 signal double_tapped
+## Glissé rapide vers le haut : turbo. (Sur PC : Maj ou X.)
+signal swiped_up
+
+## Distance du glissé vers le haut, en fraction de la hauteur d'écran.
+const SWIPE_UP := 0.09
 
 var throttle := 0.0
 var steer := 0.0
@@ -19,6 +24,8 @@ var _press_time := 0.0
 var _last_tap_end := -10.0
 var _clock := 0.0
 var _completes_double_tap := false
+var _start_y := 0.0
+var _swiped := false
 
 var _touch_index := -1
 var _anchor_x := 0.0
@@ -31,6 +38,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_touch_index = event.index
 			_anchor_x = event.position.x
 			_touch_x = event.position.x
+			_start_y = event.position.y
+			_swiped = false
 			_completes_double_tap = _clock - _last_tap_end < 0.3
 			if _completes_double_tap:
 				double_tapped.emit()
@@ -44,6 +53,18 @@ func _unhandled_input(event: InputEvent) -> void:
 				_last_tap_end = _clock
 	elif event is InputEventScreenDrag and event.index == _touch_index:
 		_touch_x = event.position.x
+		# Turbo : le pouce file vers le haut juste après s'être posé (ou à
+		# nouveau, s'il remonte nettement plus haut que son point de départ).
+		var height := get_viewport().get_visible_rect().size.y
+		if not _swiped and _start_y - event.position.y > height * SWIPE_UP:
+			_swiped = true
+			swiped_up.emit()
+		elif _swiped and event.position.y > _start_y:
+			_start_y = event.position.y
+			_swiped = false
+	elif event is InputEventKey and event.pressed and not event.echo \
+			and event.keycode in [KEY_SHIFT, KEY_X]:
+		swiped_up.emit()
 
 
 func _process(delta: float) -> void:

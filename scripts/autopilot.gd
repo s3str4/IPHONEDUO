@@ -6,7 +6,8 @@ extends RefCounted
 enum Driver { GOOD, CAUTIOUS, BLIND }
 
 
-## Renvoie [gaz, braquage] pour cette image.
+## Renvoie [gaz, braquage, turbo] pour cette image (turbo : vrai pour le
+## déclencher, en ligne droite dégagée et loin des bifurcations).
 static func drive(car: CarPhysics, track: Track, traffic: Traffic, path: Array, driver: Driver) -> Array:
 	var target := 0.0
 	if driver != Driver.BLIND:
@@ -24,4 +25,6 @@ static func drive(car: CarPhysics, track: Track, traffic: Traffic, path: Array, 
 	if driver != Driver.BLIND and traffic.free_gap(car, car.x) < 12.0 \
 			+ maxf(0.0, car.speed - traffic.speed_ahead(car, car.x)) * 0.45:
 		throttle = 0.0
-	return [throttle, car.autopilot_steer(track, target)]
+	var turbo := driver == Driver.GOOD and traffic.free_gap(car, car.x) > 160.0 \
+			and absf(track.curvature_at(car.s + 80.0)) < 0.004 and not traffic.in_fork_zone(car.s + 150.0)
+	return [throttle, car.autopilot_steer(track, target), turbo]

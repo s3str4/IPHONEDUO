@@ -22,6 +22,13 @@ static func run(seed: int, driver: Autopilot.Driver, path: Array = [0, 0, 0, 0],
 		traffic.density = RunConfig.TRAFFIC_DENSITY[game.segment()] * th.get("traffic", 1.0)
 		traffic.truck_ratio = th.get("trucks", 0.2)
 		var cmd := Autopilot.drive(car, track, traffic, path, driver)
+		if cmd[2]:
+			game.fire_turbo()
+		car.boost = (RunConfig.TURBO_SPEED if game.is_boosting() else 1.0) \
+				* (RunConfig.DRAFT_SPEED if traffic.drafting(car) else 1.0)
+		car.accel_boost = RunConfig.TURBO_ACCEL if game.is_boosting() else 1.0
+		if traffic.drafting(car):
+			game.on_draft(dt)
 		car.step(track, cmd[0], cmd[1], dt)
 		if car.hit_rail:
 			game.on_crash(car.s)

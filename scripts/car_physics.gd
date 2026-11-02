@@ -36,6 +36,10 @@ var rail_hits := 0
 ## Vrai pendant l'image où la voiture touche la glissière.
 var hit_rail := false
 
+## Multiplicateurs de vitesse de pointe et d'accélération (turbo, aspiration).
+var boost := 1.0
+var accel_boost := 1.0
+
 var _lift_time := 0.0
 var _on_rail := false
 ## Côté du terre-plein où roule la voiture (-1, 1), 0 hors bifurcation.
@@ -46,12 +50,18 @@ var hit_divider := false
 
 func step(track: Track, throttle: float, steer: float, delta: float) -> void:
 	steer = clampf(steer, -1.0, 1.0)
-	var v_ratio := speed / TOP_SPEED
+	var top := TOP_SPEED * boost
+	var v_ratio := minf(speed / TOP_SPEED, 1.0)
 
 	# Longitudinal.
 	if throttle > 0.0:
 		_lift_time = 0.0
-		speed += ACCEL * throttle * (1.0 - v_ratio * v_ratio) * delta
+		if speed < top:
+			var r := speed / top
+			speed = minf(top, speed + ACCEL * accel_boost * throttle * (1.0 - r * r) * delta)
+		else:
+			# Fin du turbo : on retombe en douceur à la vitesse de pointe.
+			speed = move_toward(speed, top, 6.0 * delta)
 	else:
 		_lift_time += delta
 		var decel := BRAKE_DECEL if _lift_time > BRAKE_DELAY else COAST_DECEL

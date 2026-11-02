@@ -43,6 +43,9 @@ var _fork_left: Label
 var _fork_right: Label
 var _card: Label
 var _hint: Label
+var _turbo_back: ColorRect
+var _turbo_fill: ColorRect
+var _turbo_label: Label
 var _paused := false
 
 ## Le bouton pause est touché ; une touche pendant la pause demande la reprise.
@@ -121,6 +124,21 @@ func _ready() -> void:
 		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_play.add_child(r)
 		_speed_bar.append(r)
+
+	# Jauge du turbo : barre verticale à droite du compteur.
+	_turbo_back = ColorRect.new()
+	_turbo_back.color = Color(1, 1, 1, 0.12)
+	_turbo_back.anchor_top = 1.0
+	_turbo_back.anchor_bottom = 1.0
+	_turbo_back.position = Vector2(222, -60)
+	_turbo_back.size = Vector2(7, 48)
+	_turbo_back.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_play.add_child(_turbo_back)
+	_turbo_fill = ColorRect.new()
+	_turbo_fill.color = PINK
+	_turbo_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_turbo_back.add_child(_turbo_fill)
+	_turbo_label = _label(_play, "TURBO", text_font(true), 8, PINK, Vector2(203, -10), HORIZONTAL_ALIGNMENT_LEFT, false, true)
 
 	# Directions à la prochaine bifurcation.
 	_fork_left = _label(_play, "", text_font(true), 11, Scenery.LEFT_SIGN.lightened(0.45), Vector2(8, 56), HORIZONTAL_ALIGNMENT_LEFT)
@@ -243,6 +261,17 @@ func title_card(text: String) -> void:
 	tw.tween_property(_card, "modulate:a", 1.0, 0.4)
 	tw.tween_interval(2.2)
 	tw.tween_property(_card, "modulate:a", 0.0, 0.8)
+
+
+## Jauge du turbo (0..1) ; elle clignote quand elle est pleine, et se vide
+## pendant le turbo (boosting : part restante).
+func set_turbo(charge: float, boosting: float) -> void:
+	var fill := boosting if boosting > 0.0 else charge
+	_turbo_fill.size = Vector2(7, 48 * fill)
+	_turbo_fill.position = Vector2(0, 48 * (1.0 - fill))
+	var full := charge >= 1.0 and fmod(_blink, 0.5) < 0.3
+	_turbo_fill.color = WHITE if full or boosting > 0.0 else PINK
+	_turbo_label.modulate.a = 1.0 if charge >= 1.0 or boosting > 0.0 else 0.55
 
 
 func set_values(time_left: float, score: float, stage: int, multiplier: float, speed_kmh: float,

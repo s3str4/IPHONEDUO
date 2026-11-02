@@ -104,6 +104,16 @@ func _drive_ghost(car: CarPhysics, delta: float) -> void:
 		ghost = null
 
 
+## Aspiration : la voiture roule dans le sillage d'un véhicule (même voie,
+## entre 4 et 30 m derrière lui).
+func drafting(car: CarPhysics) -> bool:
+	for v in vehicles:
+		var gap := v.s - v.half_length() - (car.s + CarPhysics.CAR_LENGTH * 0.5)
+		if gap > 4.0 and gap < 30.0 and absf(v.x - car.x) < 1.3:
+			return true
+	return false
+
+
 ## Voie la plus dégagée devant (pilote automatique et tests).
 func best_lane(car: CarPhysics) -> float:
 	var best_x: float = LANES[_nearest_lane(car.x)]
