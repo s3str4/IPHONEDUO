@@ -49,6 +49,9 @@ var _title_button: Button
 var _turbo_back: ColorRect
 var _turbo_fill: ColorRect
 var _turbo_label: Label
+## Scène de fin : bandes noires, plus de compteurs.
+var _cinema := false
+var _bars: Array[ColorRect] = []
 var _paused := false
 
 ## Le bouton pause est touché ; une touche pendant la pause demande la reprise.
@@ -97,6 +100,16 @@ func _ready() -> void:
 	# Bandeaux sombres en dégradé derrière l'interface, en haut et en bas.
 	root.add_child(_shade(true))
 	root.add_child(_shade(false))
+
+	# Bandes du plan de cinéma (scènes de fin), repliées hors écran.
+	for top in [true, false]:
+		var bar := ColorRect.new()
+		bar.color = Color.BLACK
+		bar.size = Vector2(270, 46)
+		bar.position = Vector2(0, -46 if top else 480)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(bar)
+		_bars.append(bar)
 
 	# Tout ce qui ne sert qu'en course (masqué sur l'écran de titre).
 	_play = Control.new()
@@ -246,6 +259,8 @@ func _ready() -> void:
 	_overlay_body.offset_left = 26.0
 	_overlay_body.offset_right = -26.0
 	_overlay_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# Sans largeur minimale, reset_size() replie le texte sur une seule lettre de large.
+	_overlay_body.custom_minimum_size.x = 218.0
 	_overlay_hint = _label(_overlay, "", arcade_font(), 9, AMBER, Vector2(0, -92), HORIZONTAL_ALIGNMENT_CENTER, true, true)
 	_title_button = Button.new()
 	_title_button.text = "TITRE"
@@ -358,7 +373,7 @@ func show_overlay(title: String, body: String, hint: String, logo := false) -> v
 	_overlay.visible = true
 	_overlay_logo.visible = logo
 	_title_button.visible = not logo
-	_play.visible = not logo
+	_play.visible = not logo and not _cinema
 	_panel.visible = not logo
 	_overlay_title.text = title
 	_overlay_body.text = body
@@ -399,6 +414,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _paused and event is InputEventScreenTouch and event.pressed:
 		get_viewport().set_input_as_handled()
 		resume_requested.emit()
+
+
+## Plan de cinéma : les compteurs s'effacent, deux bandes noires entrent.
+func cinema(on: bool) -> void:
+	_cinema = on
+	_play.visible = not on
+	var tw := create_tween().set_parallel()
+	tw.tween_property(_bars[0], "position:y", 0.0 if on else -46.0, 1.2).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(_bars[1], "position:y", 434.0 if on else 480.0, 1.2).set_trans(Tween.TRANS_SINE)
 
 
 func hide_overlay() -> void:

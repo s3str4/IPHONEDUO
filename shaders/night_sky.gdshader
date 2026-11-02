@@ -11,9 +11,13 @@ uniform vec3 moon_dir = vec3(-0.45, 0.32, -0.83);
 uniform float dawn : hint_range(0.0, 1.0) = 0.0;
 // Éclair (0..1) : les nuages s'illuminent de l'intérieur, le ciel blanchit.
 uniform float flash = 0.0;
+// Soleil levant (scènes de fin) : hauteur en radians, sous l'horizon = caché.
+uniform float sun = -0.3;
 // Direction (azimut, rad) de la ville et du lever du soleil.
 uniform float city_azimuth = 0.6;
 uniform float sun_azimuth = -0.2;
+// 0 : pas de ville à l'horizon (scènes de fin loin de la ville).
+uniform float city_amount = 1.0;
 
 float hash21(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -108,12 +112,20 @@ void sky() {
 	float bx = az * 90.0;
 	float bcell = floor(bx);
 	float bh = 0.05 + 0.07 * pow(hash21(vec2(bcell, 7.0)), 2.0) * smoothstep(0.55, 0.0, abs(az_delta(az, city_azimuth)));
-	if (h < bh && abs(az_delta(az, city_azimuth)) < 0.55) {
+	if (city_amount > 0.5 && h < bh && abs(az_delta(az, city_azimuth)) < 0.55) {
 		col = zenith * 1.5;
 		vec2 w = vec2(fract(bx) * 4.0, h * 400.0);
 		float lit = step(0.62, hash21(floor(w) + bcell * 3.1)) * step(0.3, fract(w.x)) * step(0.35, fract(w.y));
 		col += vec3(1.0, 0.75, 0.4) * lit * 0.9 * (1.0 - dawn * 0.8);
 	}
 	col += vec3(0.7, 0.75, 1.0) * flash * (0.6 + cloud_amt * 2.5) * smoothstep(-0.1, 0.3, h);
+	// Soleil : disque et grand halo chaud, dans la direction du lever.
+	vec3 sd = normalize(vec3(sin(sun_azimuth) * cos(sun), sin(sun), -cos(sun_azimuth) * cos(sun)));
+	float sc = dot(d, sd);
+	float disc = smoothstep(0.9994, 0.99965, sc) * step(far_h, h);
+	vec3 sun_col = vec3(1.0, 0.72, 0.42);
+	col += sun_col * pow(max(sc, 0.0), 60.0) * 0.8 * smoothstep(-0.25, 0.0, sun);
+	col += sun_col * pow(max(sc, 0.0), 6.0) * 0.25 * smoothstep(-0.25, 0.05, sun);
+	col = mix(col, vec3(1.0, 0.85, 0.6) * 1.4, disc);
 	COLOR = col;
 }

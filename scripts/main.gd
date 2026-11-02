@@ -77,6 +77,12 @@ var _time := 0.0
 var _shake := 0.0
 var _cam_x := 0.0
 var _end_time := 0.0
+## Scène de fin : voir EndingScene. _anchor est le bout de la route (INF en course).
+var _ending := {}
+var _anchor := INF
+var _ending_overlay: Array = []
+var _overlay_at := INF
+var _ambient_base := Color()
 var _sky_material: ShaderMaterial
 var _post_material: ShaderMaterial
 var _events: EventDirector
@@ -158,6 +164,7 @@ func _ready() -> void:
 	Halo.material()
 	traffic = Traffic.new(seed)
 	_sky_material = environment.sky.sky_material
+	_ambient_base = ProjectSettings.get_setting("shader_globals/sky_ambient")["value"]
 	_post_material = $Post/Screen.material
 	_lights = LightField.new()
 	reflection.source = camera
@@ -394,7 +401,10 @@ func _physics_process(delta: float) -> void:
 	if game.state != GameRun.State.RUNNING:
 		throttle = 0.0
 
+	var prev_speed := car.speed
 	car.step(track, throttle, steer, delta)
+	if _anchor < INF:
+		EndingScene.brake(car, _anchor, delta, prev_speed)
 	if car.hit_rail:
 		_shake = 0.5 if car.hit_divider else 0.35
 		game.on_crash(car.s)
@@ -402,7 +412,7 @@ func _physics_process(delta: float) -> void:
 		audio.play("thud" if car.hit_divider else "crash", 0.0 if car.hit_divider else -6.0)
 		Input.vibrate_handheld(150 if car.hit_divider else 60)
 	var th := builder.theme_at(car.s)
-	traffic.density = RunConfig.TRAFFIC_DENSITY[game.segment()] * th.get("traffic", 1.0)
+	traffic.density = RunConfig.TRAFFIC_DENSITY[game.segment()] * th.get("traffic", 1.0) if _anchor == INF else 0.0
 	traffic.truck_ratio = th.get("trucks", 0.2)
 	for e in traffic.update(car, delta):
 		if e.type == "crash":
@@ -421,8 +431,12 @@ func _physics_process(delta: float) -> void:
 	track.trim(car.s - (CHUNKS_BEHIND + 1) * RoadBuilder.CHUNK_LENGTH)
 
 	# Rejouer depuis l'écran de fin.
-	if game.state in [GameRun.State.ARRIVED, GameRun.State.TIME_UP] and _time - _end_time > 2.0 \
-			and input.throttle > 0.0 and not _args.has("autopilot"):
+	if game.state == GameRun.State.ARRIVED and _overlay_at < INF and input.throttle > 0.0 \
+			and _time - _end_time > 1.0 and _time < _overlay_at:
+		# Toucher pendant la scène : le texte arrive tout de suite.
+		_overlay_at = _time
+	if game.state in [GameRun.State.ARRIVED, GameRun.State.TIME_UP] and _time - maxf(_end_time, _overlay_at if _overlay_at < INF else 0.0) > 2.0 \
+			and _ending_overlay.is_empty() and input.throttle > 0.0 and not _args.has("autopilot"):
 		quick_restart = true
 		get_tree().reload_current_scene()
 
@@ -438,6 +452,7 @@ func _process(delta: float) -> void:
 	hud.set_values(game.time_left, game.score, game.segment(), game.multiplier(), car.speed_kmh(), game.progress())
 	hud.set_turbo(game.turbo, game.turbo_left / game.turbo_duration)
 	_update_dawn()
+	_update_ending(delta)
 	_update_weather(delta)
 	_update_storm(delta)
 	_update_lighting(delta)
@@ -459,14 +474,68 @@ func _process(delta: float) -> void:
 			_late_frames += 1
 			break
 	if _args.has("capture") and _time >= float(_args.get("capture_at", "6")):
+		print("état %d  s %.1f  ancre %.1f  fin %d  t %.1f/%.1f" % [game.state, car.s, _anchor, game.ending, _time, _end_time])
 		print("tronçons en retard : %d images ; pire construction dans une image : %.1f ms" % [
 				_late_frames, _worst_chunk_usec / 1000.0])
 		get_viewport().get_texture().get_image().save_png(_args["capture"])
 		get_tree().quit()
 
 
+## Durée de la scène de fin avant que le texte n'apparaisse (s).
+const ENDING_SCENE_TIME := 7.0
+
+
+## Arrivée : le bout de la route, le décor de la destination, le soleil en face.
+func _begin_ending_scene() -> void:
+	_anchor = EndingScene.anchor_s(RunConfig.arrival_s())
+	track.ensure(_anchor + 400.0)
+	_ending = EndingScene.build(game.ending, builder, track, _anchor)
+	add_child(_ending["node"])
+	var fwd: Vector3 = -(_ending["frame"] as Transform3D).basis.z
+	_sky_material.set_shader_parameter("sun_azimuth", atan2(fwd.x, -fwd.z) + float(_ending["sun"]))
+	_sky_material.set_shader_parameter("city_amount", 1.0 if game.ending == 1 else 0.0)
+	traffic.vehicles.clear()
+	traffic.ghost = null
+	camera.far = 4000.0
+	hud.cinema(true)
+
+
+## Après l'arrivée : la voiture s'arrête avant le bout de la route, le monde
+## au-delà disparaît, le soleil se lève, la lumière se réchauffe.
+func _update_ending(delta: float) -> void:
+	if _anchor == INF:
+		return
+	var u := _time - _end_time
+	for i in _chunks:
+		_chunks[i].visible = i * RoadBuilder.CHUNK_LENGTH < _anchor
+	_sky_material.set_shader_parameter("sun", lerpf(-0.12, 0.07, smoothstep(0.0, 12.0, u)))
+	var warm := smoothstep(0.0, 6.0, u)
+	_ambient_base = (ProjectSettings.get_setting("shader_globals/sky_ambient")["value"] as Color).lerp(
+			Color(0.62, 0.5, 0.5), warm)
+	_sky_material.set_shader_parameter("dawn", 1.0)
+	_sky_material.set_shader_parameter("horizon", DAWN_HORIZON.lerp(Color(0.85, 0.55, 0.45), warm))
+	_sky_material.set_shader_parameter("zenith", DAWN_ZENITH.lerp(Color(0.3, 0.42, 0.66), warm))
+	RenderingServer.global_shader_parameter_set("fog_color", DAWN_FOG.lerp(Color(0.8, 0.56, 0.5), warm))
+	if _time >= _overlay_at and not _ending_overlay.is_empty():
+		hud.show_overlay(_ending_overlay[0], _ending_overlay[1], _ending_overlay[2])
+		_ending_overlay = []
+
+
+## Plan final [œil, visée] en coordonnées du monde : œil près de la voiture,
+## qui monte et recule doucement ; visée sur le décor de la destination.
+func _ending_shot() -> Array:
+	var f: Transform3D = _ending["frame"]
+	var drift := smoothstep(0.0, 14.0, _time - _end_time)
+	var local_car := f.affine_inverse() * car_view.global_position
+	var eye_off: Vector3 = _ending["eye"]
+	var eye := f * (local_car + eye_off + Vector3(0, drift * 1.5, drift * 3.0))
+	return [eye, f * (_ending["focus"] as Vector3)]
+
+
 ## Le ciel s'éclaircit pendant toute la partie : c'est aussi la jauge d'avancement.
 func _update_dawn() -> void:
+	if _anchor < INF:
+		return
 	var p := clampf(car.s / RunConfig.arrival_s(), 0.0, 1.0)
 	var d := smoothstep(0.25, 1.0, p)
 	_sky_material.set_shader_parameter("dawn", d)
@@ -517,8 +586,7 @@ func _update_storm(delta: float) -> void:
 		if _thunder_in < 0.0:
 			audio.play("thunder", randf_range(-6.0, 0.0), randf_range(0.85, 1.1))
 	_sky_material.set_shader_parameter("flash", _flash)
-	var base: Color = ProjectSettings.get_setting("shader_globals/sky_ambient")["value"]
-	RenderingServer.global_shader_parameter_set("sky_ambient", base + Color(1.3, 1.4, 1.8) * _flash)
+	RenderingServer.global_shader_parameter_set("sky_ambient", _ambient_base + Color(1.3, 1.4, 1.8) * _flash)
 
 
 ## Lumières proches, phares, reflet de la route, effets de vitesse.
@@ -529,6 +597,7 @@ func _update_lighting(delta: float) -> void:
 	var neon := car_view.neon_color()
 	if neon != Color.BLACK:
 		sources.append([car_view.global_position + Vector3.UP * 0.25, neon, 7.0, 3.0])
+	sources.append_array(_ending.get("lights", []))
 	_lights.update(sources, cam, delta)
 	var t := track.transform_at(car.s, car.x)
 	var fwd := -car_view.global_transform.basis.z
@@ -547,9 +616,11 @@ func _update_weather(delta: float) -> void:
 	_fog_tint = _fog_tint.lerp(th.get("fog_tint", NIGHT_FOG), k)
 	var tunnel := builder.in_tunnel(car.s)
 	var weather: float = th.get("rain", 1.0)
-	_rain = lerpf(_rain, 0.0 if tunnel else absf(weather), 1.0 - exp(-3.0 * delta) if delta > 0.0 else 1.0)
-	RenderingServer.global_shader_parameter_set("fog_start", FOG_START / _fog_scale)
-	RenderingServer.global_shader_parameter_set("fog_end", FOG_END / _fog_scale)
+	_rain = lerpf(_rain, 0.0 if tunnel or _anchor < INF else absf(weather), 1.0 - exp(-3.0 * delta) if delta > 0.0 else 1.0)
+	# Scène de fin : l'air se lave, on voit jusqu'à l'horizon.
+	var clear := smoothstep(0.0, 4.0, _time - _end_time) if _anchor < INF else 0.0
+	RenderingServer.global_shader_parameter_set("fog_start", lerpf(FOG_START / _fog_scale, 160.0, clear))
+	RenderingServer.global_shader_parameter_set("fog_end", lerpf(FOG_END / _fog_scale, 1800.0, clear))
 	rain.set_weather(_rain, weather < 0.0)
 	# Gouttes sur l'écran : seulement sous la pluie.
 	_post_material.set_shader_parameter("rain", _rain if weather > 0.0 else 0.0)
@@ -633,13 +704,15 @@ func _on_arrived(bonus: int) -> void:
 		save.events_seen[f] = true
 	var earned := _earn_credits()
 	_write_save()
-	hud.show_overlay(RouteMap.ENDINGS[game.ending],
+	_begin_ending_scene()
+	_ending_overlay = [RouteMap.ENDINGS[game.ending],
 			"%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/6\n%s\n+%s CRÉDITS%s" % [
 				Scenario.ending_text(game.ending, game.flags), lou,
 				"NOUVELLE FIN ! " if first_time else "", Hud._group(int(game.score)), Hud._group(bonus),
 				game.flags.size(), "NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(save.best),
 				Hud._group(earned), "  —  nouvelle teinte au garage" if first_time else ""],
-			"TOUCHE POUR REJOUER")
+			"TOUCHE POUR REJOUER"]
+	_overlay_at = _time + ENDING_SCENE_TIME
 
 
 func _on_time_up() -> void:
@@ -794,6 +867,15 @@ func _place_car_and_camera(delta: float) -> void:
 	# Visée basse : en portrait le champ vertical est immense, on le donne à la
 	# route devant plutôt qu'au ciel.
 	var target := track.transform_at(car.s + 12.0, car.x * 0.4, -3.1).origin
+	if _anchor < INF:
+		# Scène de fin : la caméra quitte la voiture et s'élève vers l'aube.
+		var shot := _ending_shot()
+		var b := smoothstep(0.3, 5.0, _time - _end_time)
+		eye = eye.lerp(shot[0], b)
+		target = target.lerp(shot[1], b)
+		camera.look_at_from_position(eye, target, Vector3.UP)
+		camera.fov = lerpf(lerpf(60.0, 72.0, minf(car.speed / CarPhysics.TOP_SPEED, 1.0)), 50.0, b)
+		return
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta)
 		eye += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * _shake * 0.25

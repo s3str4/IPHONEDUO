@@ -296,6 +296,13 @@ deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
     du jour. **Réglages** : volumes, sensibilité du pouce, qualité graphique.
   - **Orages** : éclairs (double éclat qui illumine les nuages et la scène),
     tonnerre une à deux secondes après, sous la pluie battante.
+  - **Scènes de fin à l'aube** : la route s'arrête, la voiture freine, la
+    caméra la quitte en bandes cinéma et le soleil se lève en face. Un décor
+    par destination : la plage et Lou en ciré jaune (phare au loin),
+    l'immeuble et sa seule fenêtre allumée au quatrième, la crête du barrage
+    entre le lac et le vide, l'observatoire au-dessus d'une mer de nuages,
+    la cabine téléphonique sur la plaine blanche. Le texte arrive après
+    sept secondes (ou d'une touche).
   - Version web jouable sur iPhone (GitHub Pages), sans saccade : la route se
     construit par étapes quand le navigateur n'a pas de threads. Pause,
     premiers pas guidés, vibrations aux chocs (app).

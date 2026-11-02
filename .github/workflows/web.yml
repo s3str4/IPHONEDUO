@@ -51,7 +51,11 @@ jobs:
       - name: Import et tests
         run: |
           ~/godot/godot --headless --path . --import
-          ~/godot/godot --headless --path . --script res://tests/run_tests.gd
+          # Une erreur de script peut laisser le banc finir sans avoir tout joué :
+          # on exige « TOUT PASSE » et aucune SCRIPT ERROR.
+          ~/godot/godot --headless --path . --script res://tests/run_tests.gd 2>&1 | tee tests.log
+          grep -q "TOUT PASSE" tests.log
+          ! grep -q "SCRIPT ERROR" tests.log
 
       - name: Export Web
         run: |

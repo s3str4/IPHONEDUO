@@ -28,6 +28,7 @@ func _initialize() -> void:
 	_test_save_and_garage()
 	await _test_car_feel()
 	await _test_thumb_input()
+	_test_ending_scenes()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
 
@@ -761,3 +762,43 @@ func _test_car_feel() -> void:
 	_check(r.x < 0.0 and r.z < 0.0, "voiture : plonge au freinage, penche vers l'extérieur", str(r))
 	view.queue_free()
 	await process_frame
+
+
+func _test_ending_scenes() -> void:
+	var arrival := RunConfig.arrival_s()
+	var anchor := EndingScene.anchor_s(arrival)
+	_check(anchor >= arrival + EndingScene.RUNOUT and fmod(anchor, RoadBuilder.CHUNK_LENGTH) == 0.0,
+			"fin : bout de la route au-delà de l'arrivée, en début de tronçon", str(anchor))
+	# La voiture la plus rapide possible (turbo, aspiration, moteur au maximum)
+	# s'arrête avant le bout de la route, sans le frein brutal à la dernière seconde.
+	var track := Track.new(3)
+	for path in [[0, 0, 0, 0], [1, 1, 1, 1]]:
+		track.choices.assign(path)
+		track.ensure(anchor + 500.0)
+		var car := CarPhysics.new()
+		car.s = arrival
+		car.speed = CarPhysics.TOP_SPEED * RunConfig.TURBO_SPEED * RunConfig.DRAFT_SPEED * 1.1
+		var worst := 0.0
+		for i in 1200:
+			var before := car.speed
+			car.step(track, 0.0, 0.0, 1.0 / 60.0)
+			EndingScene.brake(car, anchor, 1.0 / 60.0, before)
+			worst = maxf(worst, (before - car.speed) * 60.0)
+		_check(car.speed == 0.0 and car.s <= anchor - EndingScene.STOP_BEFORE + 0.5
+				and car.s > anchor - EndingScene.STOP_BEFORE - 3.0,
+				"fin : la voiture s'arrête au bout de la route, pas avant", "s %.4f / %.1f, v %s" % [car.s, anchor, str(car.speed)])
+		_check(worst < 40.0, "fin : freinage final sans à-coup", "%.1f m/s²" % worst)
+	# Chaque destination a son décor, devant la voiture.
+	var b := RoadBuilder.new(track, 3)
+	var ok := true
+	var detail := ""
+	for e in RouteMap.ENDINGS.size():
+		var sc := EndingScene.build(e, b, track, anchor)
+		var mi: MeshInstance3D = sc["node"]
+		var focus: Vector3 = sc["focus"]
+		var surfaces := mi.mesh.get_surface_count() if mi.mesh else 0
+		if surfaces < 1 or focus.z >= 0.0 or not (sc["frame"] as Transform3D).origin.is_finite():
+			ok = false
+			detail += "%d " % e
+		mi.free()
+	_check(ok, "fin : un décor pour chacune des cinq destinations", detail)
