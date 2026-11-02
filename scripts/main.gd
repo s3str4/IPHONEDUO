@@ -500,6 +500,7 @@ func _process(delta: float) -> void:
 	hud.set_turbo(game.turbo, game.turbo_left / game.turbo_duration)
 	_update_dawn()
 	_update_ending(delta)
+	_sky_material.set_shader_parameter("pixel_angle", deg_to_rad(camera.fov) / maxf(1.0, get_viewport().get_texture().get_size().y))
 	_update_weather(delta)
 	_update_storm(delta)
 	_update_lighting(delta)

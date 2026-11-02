@@ -18,6 +18,9 @@ uniform float city_azimuth = 0.6;
 uniform float sun_azimuth = -0.2;
 // 0 : pas de ville à l'horizon (scènes de fin loin de la ville).
 uniform float city_amount = 1.0;
+// Taille d'un pixel de l'écran en radians (voir Main), pour l'anticrénelage
+// des fenêtres de la ville à l'horizon.
+uniform float pixel_angle = 0.002;
 
 float hash21(vec2 p) {
 	p = fract(p * vec2(123.34, 456.21));
@@ -48,6 +51,17 @@ float fbm(vec2 p) {
 float az_delta(float a, float b) {
 	return mod(a - b + 3.14159265, 6.2831853) - 3.14159265;
 }
+
+// Créneau périodique allumé sur [a, 1) de chaque période, moyenné sur une
+// largeur w (en périodes) : l'intégrale exacte, sans crénelage.
+float pulse_integral(float x, float a) {
+	return floor(x) * (1.0 - a) + max(fract(x) - a, 0.0);
+}
+float pulse_aa(float x, float a, float w) {
+	w = max(w, 1e-4);
+	return (pulse_integral(x + w * 0.5, a) - pulse_integral(x - w * 0.5, a)) / w;
+}
+
 
 void sky() {
 	vec3 d = normalize(EYEDIR);
@@ -114,8 +128,11 @@ void sky() {
 	float bh = 0.05 + 0.07 * pow(hash21(vec2(bcell, 7.0)), 2.0) * smoothstep(0.55, 0.0, abs(az_delta(az, city_azimuth)));
 	if (city_amount > 0.5 && h < bh && abs(az_delta(az, city_azimuth)) < 0.55) {
 		col = zenith * 1.5;
-		vec2 w = vec2(fract(bx) * 4.0, h * 400.0);
-		float lit = step(0.62, hash21(floor(w) + bcell * 3.1)) * step(0.3, fract(w.x)) * step(0.35, fract(w.y));
+		vec2 w = vec2(fract(bx) * 2.0, h * 220.0);
+		// Part de chaque pixel couverte par une fenêtre allumée, calculée exactement
+		// (filtre boîte) : sans ça, ces fenêtres de 2 à 3 pixels scintillaient en roulant.
+		float lit = step(0.62, hash21(floor(w) + bcell * 3.1))
+				* pulse_aa(w.x, 0.3, pixel_angle * 180.0) * pulse_aa(w.y, 0.35, pixel_angle * 220.0);
 		col += vec3(1.0, 0.75, 0.4) * lit * 0.9 * (1.0 - dawn * 0.8);
 	}
 	col += vec3(0.7, 0.75, 1.0) * flash * (0.6 + cloud_amt * 2.5) * smoothstep(-0.1, 0.3, h);
