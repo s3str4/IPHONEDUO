@@ -519,6 +519,7 @@ func _begin_ending_scene() -> void:
 	traffic.ghost = null
 	camera.far = 4000.0
 	hud.cinema(true)
+	audio.play_dawn()
 
 
 ## Après l'arrivée : la voiture s'arrête avant le bout de la route, le monde

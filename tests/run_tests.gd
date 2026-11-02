@@ -583,6 +583,18 @@ func _test_audio_and_double_tap() -> void:
 	var audio := AudioDirector.new()
 	root.add_child(audio)
 	await process_frame
+	# Aube : la radio s'éteint, la musique de fin joue, le moteur se fait discret.
+	audio.play_dawn()
+	for i in 20:
+		await create_timer(0.3).timeout
+	audio.update(0.0, 0.0, 0.0, false, 1.0 / 30.0)
+	_check(audio._dawn.playing and audio._dawn.stream.get_length() > 20.0 and not audio._music.playing
+			and audio._engine_fade < 0.35 and audio._dawn.bus == "Musique",
+			"son : à l'aube, la musique de fin remplace la radio")
+	audio.queue_free()
+	audio = AudioDirector.new()
+	root.add_child(audio)
+	await process_frame
 	# Le régime monte dans un rapport, retombe au passage du suivant.
 	var rpms := []
 	var gears := []

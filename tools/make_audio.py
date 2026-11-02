@@ -6,7 +6,8 @@ externe) : assets/audio/*.ogg.
 
 Boucles sans couture (moteur, pluie, vent, pneus, musiques : rendu circulaire,
 ce qui déborde de la fin revient au début), bruitages ponctuels, et deux
-stations de radio : synthwave (104 bpm) et lo-fi (78 bpm). Déterministe.
+stations de radio : synthwave (104 bpm) et lo-fi (78 bpm), et la musique de
+l'aube des scènes de fin. Déterministe.
 Dépendances : numpy, ffmpeg (encodage Ogg Vorbis).
 """
 import subprocess
@@ -343,6 +344,47 @@ def lofi():
     return reverb(track, 1.4, 0.22)
 
 
+def dawn():
+    """Aube (scènes de fin) : 26 s sans boucle. Une nappe qui s'ouvre lentement
+    (D maj7, B m9, G maj7, A sus4 puis A), des cloches douces qui égrènent
+    l'accord, une basse ronde ; tout s'éteint sur la dernière note."""
+    length = 26.0
+    n = int(SR * length)
+    track = np.zeros((n, 2))
+    prog = [[50, 57, 61, 64, 66], [47, 54, 57, 61, 62], [43, 50, 54, 57, 59], [45, 52, 57, 62, 64]]
+    seg = 6.0
+    for k, chord in enumerate(prog):
+        t0 = k * seg
+        dur = seg + (2.5 if k < 3 else 2.0)
+        m = int(SR * dur)
+        tt = np.arange(m) / SR
+        pad = np.zeros(m)
+        for note in chord[1:]:
+            for det in (-0.003, 0.0, 0.003):
+                pad += saw(note_freq(note) * (1 + det), tt, 8) * 0.18
+        # Filtre qui s'ouvre au fil du morceau : l'aube qui monte.
+        pad = fft_filter(pad, 80, 700 + 900 * k)
+        e = np.minimum(1.0, tt / 2.2) * np.minimum(1.0, (dur - tt) / 2.5)
+        place(track, pad * e, t0, 0.55)
+        # Basse à l'octave du haut-parleur d'un téléphone (sous 80 Hz, il ne joue rien).
+        bass = np.sin(2 * np.pi * note_freq(chord[0]) * tt) * e * 0.35
+        place(track, bass, t0, 0.8)
+        # Cloches : l'accord égrené, de plus en plus présent.
+        if k >= 1:
+            for j, note in enumerate(chord[2:] + [chord[1] + 12]):
+                bt = t_axis(3.0)
+                bell = (np.sin(2 * np.pi * note_freq(note + 12) * bt)
+                        + 0.3 * np.sin(2 * np.pi * note_freq(note + 24) * 2.01 * bt)) * np.exp(-bt / 0.9)
+                place(track, bell, t0 + 0.4 + j * 0.75, 0.10 + 0.04 * k, pan=0.5 * np.sin(j * 1.7))
+    # Résolution : A sus4 glisse vers A (le Do# arrive à 21 s).
+    tt = t_axis(5.0)
+    e = np.minimum(1.0, tt / 1.5) * np.exp(-np.maximum(tt - 1.5, 0) / 1.4)
+    res = sum(saw(note_freq(nn), tt, 8) for nn in (57, 61, 64, 69)) * 0.12
+    place(track, fft_filter(res, 80, 3000) * e, 21.0, 0.6)
+    fade = np.minimum(1.0, (length - np.arange(n) / SR) / 3.0)[:, None]
+    return reverb(track * fade, 2.6, 0.35)
+
+
 def main():
     # Moteur : passe-bas pour garder le grondement et la montée, sans grésillement.
     save("engine_low", fft_filter(engine(40.0, 2.0, 0.2), None, 1400) * 0.9, loop=True)
@@ -359,6 +401,7 @@ def main():
     save("thunder", thunder())
     save("music_synthwave", synthwave(), loop=True)
     save("music_lofi", lofi(), loop=True)
+    save("dawn", dawn())
 
 
 if __name__ == "__main__":

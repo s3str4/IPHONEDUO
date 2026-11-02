@@ -27,6 +27,9 @@ var _wind: AudioStreamPlayer
 var _rain: AudioStreamPlayer
 var _tires: AudioStreamPlayer
 var _music: AudioStreamPlayer
+## Scène de fin : la musique de l'aube, et le moteur qui s'efface au ralenti.
+var _dawn: AudioStreamPlayer
+var _engine_fade := 1.0
 var _oneshots: Array[AudioStreamPlayer] = []
 var _streams := {}
 var _reverb: AudioEffectReverb
@@ -80,13 +83,31 @@ func update(speed: float, throttle: float, rain_amount: float, tunnel: bool, del
 	var load := 1.0 if throttle > 0.0 else 0.55
 	_engine_low.pitch_scale = 0.55 + rpm * 1.25
 	_engine_high.pitch_scale = 0.5 + rpm * 1.15
-	_engine_low.volume_db = linear_to_db(lerpf(0.9, 0.45, rpm) * load) - 6.0
-	_engine_high.volume_db = linear_to_db(pow(rpm, 1.6) * load * 0.8 + 0.001) - 6.0
+	_engine_low.volume_db = linear_to_db(lerpf(0.9, 0.45, rpm) * load * _engine_fade + 0.001) - 6.0
+	_engine_high.volume_db = linear_to_db(pow(rpm, 1.6) * load * 0.8 * _engine_fade + 0.001) - 6.0
 	var v := clampf(speed / CarPhysics.TOP_SPEED, 0.0, 1.0)
 	_wind.volume_db = linear_to_db(v * v * 0.7 + 0.001) - 4.0
 	_tires.volume_db = linear_to_db(pow(v, 1.4) * rain_amount * 0.6 + 0.001) - 6.0
 	_rain.volume_db = linear_to_db((0.0 if tunnel else rain_amount) * 0.7 + 0.001) - 4.0
 	_reverb.wet = move_toward(_reverb.wet, 0.35 if tunnel else 0.0, delta * 1.5)
+
+
+## Arrivée : la radio s'éteint doucement, le moteur se tait presque, et la
+## musique de l'aube monte (sur le bus Musique : le réglage de volume compte).
+func play_dawn() -> void:
+	if _dawn != null:
+		return
+	_dawn = AudioStreamPlayer.new()
+	_dawn.bus = _music.bus
+	_dawn.stream = _stream("dawn")
+	_dawn.volume_db = -30.0
+	add_child(_dawn)
+	var tw := create_tween().set_parallel()
+	tw.tween_property(_music, "volume_db", -60.0, 3.0)
+	tw.tween_property(self, "_engine_fade", 0.3, 5.0)
+	tw.tween_callback(_dawn.play).set_delay(1.2)
+	tw.tween_property(_dawn, "volume_db", -5.0, 4.0).set_delay(1.2)
+	tw.chain().tween_callback(_music.stop)
 
 
 func next_station() -> String:
