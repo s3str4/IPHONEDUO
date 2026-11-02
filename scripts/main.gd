@@ -13,6 +13,7 @@ extends Node3D
 ##   --fps              affiche les images par seconde (essais sur iPhone)
 ##   --sliced           construit la route par étapes, comme la version web
 ##   --menu=garage      ouvre un écran du titre (garage, carnet, reglages)
+##   --storm_at=SEC     premier éclair à cet instant (captures)
 ## Dans la version web, les mêmes options passent par l'adresse : ?fps&seed=3
 ##   --capture=PATH     enregistre une image PNG puis quitte
 ##   --capture_at=SEC   instant de la capture (défaut 6)
@@ -110,6 +111,11 @@ var _tutorial_step := 0
 var _tutorial_fork := false
 var _turbo_explained := false
 var _turbo_fov := 0.0
+## Orage : délai avant le prochain éclair, éclat en cours, tonnerre attendu.
+var _storm_wait := 14.0
+var _flash := 0.0
+var _flash_time := -1.0
+var _thunder_in := -1.0
 
 
 func _ready() -> void:
@@ -124,6 +130,8 @@ func _ready() -> void:
 		_args[kv[0]] = kv[1] if kv.size() > 1 else "true"
 	if _args.has("sliced"):
 		_sliced = true
+	if _args.has("storm_at"):
+		_storm_wait = float(_args["storm_at"])
 	var seed := daily_seed() if daily_mode else int(_args.get("seed", "1"))
 	if _args.has("path"):
 		_path.clear()
@@ -406,6 +414,7 @@ func _process(delta: float) -> void:
 	hud.set_turbo(game.turbo, game.turbo_left / game.turbo_duration)
 	_update_dawn()
 	_update_weather(delta)
+	_update_storm(delta)
 	_update_lighting(delta)
 	_update_tutorial()
 	if _fps_label:
@@ -439,6 +448,34 @@ func _update_dawn() -> void:
 	_sky_material.set_shader_parameter("zenith", NIGHT_ZENITH.lerp(DAWN_ZENITH, d * d))
 	RenderingServer.global_shader_parameter_set("fog_color", _fog_tint.lerp(DAWN_FOG, d * 0.8))
 	environment.ambient_light_energy = lerpf(0.5, 1.6, d)
+
+
+## Orage, sous la pluie battante : un éclair de temps en temps (double éclat
+## qui éclaire toute la scène), puis le tonnerre une à deux secondes après.
+func _update_storm(delta: float) -> void:
+	var th := builder.theme_at(car.s)
+	var stormy: bool = th.get("rain", 1.0) >= 1.0 and not builder.in_tunnel(car.s) \
+			and game.state == GameRun.State.RUNNING
+	if stormy:
+		_storm_wait -= delta
+		if _storm_wait <= 0.0:
+			_storm_wait = randf_range(12.0, 30.0)
+			_flash_time = 0.0
+			_thunder_in = randf_range(0.6, 2.0)
+	if _flash_time >= 0.0:
+		_flash_time += delta
+		# Deux éclats rapprochés, puis plus rien.
+		_flash = exp(-_flash_time * 14.0) + 0.7 * exp(-absf(_flash_time - 0.16) * 18.0)
+		if _flash_time > 0.6:
+			_flash_time = -1.0
+			_flash = 0.0
+	if _thunder_in >= 0.0:
+		_thunder_in -= delta
+		if _thunder_in < 0.0:
+			audio.play("thunder", randf_range(-6.0, 0.0), randf_range(0.85, 1.1))
+	_sky_material.set_shader_parameter("flash", _flash)
+	var base: Color = ProjectSettings.get_setting("shader_globals/sky_ambient")["value"]
+	RenderingServer.global_shader_parameter_set("sky_ambient", base + Color(1.3, 1.4, 1.8) * _flash)
 
 
 ## Lumières proches, phares, reflet de la route, effets de vitesse.

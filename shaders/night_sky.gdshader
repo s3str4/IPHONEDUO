@@ -9,6 +9,8 @@ uniform vec3 dawn_glow : source_color = vec3(0.95, 0.45, 0.25);
 uniform vec3 city_glow : source_color = vec3(0.9, 0.45, 0.2);
 uniform vec3 moon_dir = vec3(-0.45, 0.32, -0.83);
 uniform float dawn : hint_range(0.0, 1.0) = 0.0;
+// Éclair (0..1) : les nuages s'illuminent de l'intérieur, le ciel blanchit.
+uniform float flash = 0.0;
 // Direction (azimut, rad) de la ville et du lever du soleil.
 uniform float city_azimuth = 0.6;
 uniform float sun_azimuth = -0.2;
@@ -77,6 +79,7 @@ void sky() {
 
 	// Nuages : couche projetée sur un plafond, dérive lente, éclairés par en
 	// dessous (ville, aube) et bordés par la lune.
+	float cloud_amt = 0.0;
 	if (h > 0.0) {
 		vec2 cuv = d.xz / (h + 0.12) * 1.4 + vec2(TIME * 0.006, TIME * 0.002);
 		float n = fbm(cuv);
@@ -87,6 +90,7 @@ void sky() {
 		vec3 cloud_col = under + rim * 0.5;
 		col = mix(col, cloud_col, cloud * 0.85);
 		moon *= 1.0 - cloud;
+		cloud_amt = cloud;
 	}
 	col = mix(col, moon_col, moon);
 
@@ -110,5 +114,6 @@ void sky() {
 		float lit = step(0.62, hash21(floor(w) + bcell * 3.1)) * step(0.3, fract(w.x)) * step(0.35, fract(w.y));
 		col += vec3(1.0, 0.75, 0.4) * lit * 0.9 * (1.0 - dawn * 0.8);
 	}
+	col += vec3(0.7, 0.75, 1.0) * flash * (0.6 + cloud_amt * 2.5) * smoothstep(-0.1, 0.3, h);
 	COLOR = col;
 }

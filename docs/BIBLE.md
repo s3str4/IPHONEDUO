@@ -279,6 +279,27 @@ deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
     16 lumières par pixel) ; réglages de repli prévus (réflexion plus
     petite, moins de lumières).
 
+- **Concept approfondi (après M3) :**
+  - **Turbo néon** : jauge remplie par les frôlages, les dérapages,
+    l'aspiration (+4 % de vitesse dans le sillage d'un véhicule) et la
+    conduite sans choc ; glisser le pouce vers le haut le déclenche (+18 % de
+    vitesse de pointe pendant 3,5 s).
+  - **Messages de Lou** : 15 messages vocaux, un par tronçon, reçus à chaque
+    station (le dernier à l'aube) ; dix ans de messages jamais écoutés.
+  - **Carnet de route** : fins (et record de chacune), messages, événements,
+    records, teintes de voiture.
+  - **Garage** : crédits gagnés à chaque partie (1 pour 100 points), moteur,
+    pneus pluie, turbo, châssis sur trois niveaux aux gains modestes ;
+    aileron, néon sous caisse (qui éclaire la route), jantes chromées ; une
+    teinte par fin découverte.
+  - **Nuit du jour** : même route et même trafic pour tous ce jour-là, record
+    du jour. **Réglages** : volumes, sensibilité du pouce, qualité graphique.
+  - **Orages** : éclairs (double éclat qui illumine les nuages et la scène),
+    tonnerre une à deux secondes après, sous la pluie battante.
+  - Version web jouable sur iPhone (GitHub Pages), sans saccade : la route se
+    construit par étapes quand le navigateur n'a pas de threads. Pause,
+    premiers pas guidés, vibrations aux chocs (app).
+
 ## 13. Rôles
 
 - **Claude** : direction du projet, game design, code, graphismes et sons

@@ -206,6 +206,15 @@ def thud():
         + fft_filter(rng.normal(0, 1, len(t)), 80, 900) * np.exp(-t / 0.1) * 0.8
 
 
+def thunder():
+    """Tonnerre : un craquement sec, puis un grondement grave qui roule."""
+    t = t_axis(4.5)
+    crack = fft_filter(rng.normal(0, 1, len(t)), 400, 6000) * np.exp(-t / 0.08) * 0.6
+    rumble = fft_filter(rng.normal(0, 1, len(t)), 25, 260)
+    swell = (1 - np.exp(-t / 0.3)) * np.exp(-t / 1.6) * (1 + 0.4 * np.sin(2 * np.pi * 1.3 * t))
+    return crack + rumble * swell * 3.0
+
+
 def blip():
     t = t_axis(0.25)
     return np.sin(2 * np.pi * (660 + 400 * t) * t) * env(len(t), 0.005, 0.08)
@@ -347,6 +356,7 @@ def main():
     save("static", static_burst())
     save("thud", thud())
     save("blip", blip())
+    save("thunder", thunder())
     save("music_synthwave", synthwave(), loop=True)
     save("music_lofi", lofi(), loop=True)
 

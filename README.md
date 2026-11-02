@@ -29,6 +29,7 @@ Commandes sur PC :
 | Tourner | glisser à gauche / à droite | ← → / Q D |
 | Freiner | relâcher le bouton (longtemps = frein) | relâcher |
 | Changer de radio | double clic | double clic |
+| Turbo (jauge pleine) | glisser vers le haut | Maj / X |
 
 Le glissé est relatif : là où on pose le pouce, les roues sont droites.
 
@@ -42,7 +43,9 @@ Options (Projet > Paramètres > Exécution, ou en ligne de commande après `--`)
 `--seed=N` (autre route et autre trafic), `--autopilot` (la voiture roule seule),
 `--path=0110` (chemin du pilote automatique : 0 gauche, 1 droite),
 `--start_s=M` (démarre à M mètres, ex. 20000 pour voir l'aube),
-`--showcase` (écran de titre sans interface, pour regarder la voiture).
+`--showcase` (écran de titre sans interface, pour regarder la voiture),
+`--menu=garage` (ouvre un écran du titre), `--storm_at=5` (éclair à 5 s),
+`--sliced` (route construite par étapes, comme dans le navigateur).
 
 ## Tests
 
@@ -84,6 +87,8 @@ godot --headless --path . --script res://tools/balance.gd
 | `scripts/halo.gd` | Halos lumineux face caméra |
 | `scripts/light_field.gd`, `scripts/reflection.gd` | Lumières proches par pixel, reflet de la route mouillée |
 | `scripts/audio_director.gd` | Moteur, ambiances, bruitages, stations de radio |
+| `scripts/save_data.gd` | Sauvegarde : records, fins, messages, garage, réglages |
+| `scripts/menus.gd`, `scripts/garage.gd` | Carnet de route, garage, réglages |
 | `shaders/` | Éclairage de nuit, route miroir, carrosserie, ciel, cônes, halos, post-traitement |
 | `assets/fonts/` | Polices libres (OFL, voir LICENSE.txt) |
 | `assets/audio/`, `tools/make_audio.py` | Sons et musiques synthétisés |

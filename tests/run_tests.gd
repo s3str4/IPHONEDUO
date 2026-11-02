@@ -601,7 +601,7 @@ func _test_audio_and_double_tap() -> void:
 	_check(names[-1] == AudioDirector.STATIONS[0]["name"] and names.has("RADIO ÉTEINTE"),
 			"radio : le double tap fait le tour des stations", str(names))
 	for name in ["engine_low", "engine_high", "rain", "wind", "tires", "crash", "whoosh", "chime", "static",
-			"thud", "blip", "music_synthwave", "music_lofi"]:
+			"thud", "blip", "thunder", "music_synthwave", "music_lofi"]:
 		_check(ResourceLoader.exists("res://assets/audio/%s.ogg" % name), "son : %s présent" % name)
 	audio.queue_free()
 	# Double tap : deux touches brèves rapprochées.
