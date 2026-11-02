@@ -35,6 +35,9 @@ var spoiler_on := true
 var neon_on := true
 ## Langue : "" (celle du système), "fr" ou "en".
 var language := ""
+## Poursuites : semées, et arrestations.
+var pursuits_escaped := 0
+var busted := 0
 
 
 static func load_or_new(p: String = PATH) -> SaveData:
@@ -69,6 +72,8 @@ static func load_or_new(p: String = PATH) -> SaveData:
 	s.spoiler_on = bool(cfg.get_value("garage", "spoiler_on", true))
 	s.neon_on = bool(cfg.get_value("garage", "neon_on", true))
 	s.language = str(cfg.get_value("settings", "language", ""))
+	s.pursuits_escaped = int(cfg.get_value("progress", "pursuits_escaped", 0))
+	s.busted = int(cfg.get_value("progress", "busted", 0))
 	return s
 
 
@@ -92,6 +97,8 @@ func write() -> void:
 	cfg.set_value("garage", "spoiler_on", spoiler_on)
 	cfg.set_value("garage", "neon_on", neon_on)
 	cfg.set_value("settings", "language", language)
+	cfg.set_value("progress", "pursuits_escaped", pursuits_escaped)
+	cfg.set_value("progress", "busted", busted)
 	cfg.save(path)
 
 

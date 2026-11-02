@@ -30,6 +30,8 @@ var _music: AudioStreamPlayer
 ## Scène de fin : la musique de l'aube, et le moteur qui s'efface au ralenti.
 var _dawn: AudioStreamPlayer
 var _engine_fade := 1.0
+var _siren: AudioStreamPlayer
+var _siren_level := 0.0
 var _oneshots: Array[AudioStreamPlayer] = []
 var _streams := {}
 var _reverb: AudioEffectReverb
@@ -55,6 +57,7 @@ func _ready() -> void:
 	_wind = _loop("wind", -40.0)
 	_rain = _loop("rain", -20.0)
 	_tires = _loop("tires", -40.0)
+	_siren = _loop("siren", -80.0)
 	_music = AudioStreamPlayer.new()
 	_music.bus = AudioServer.get_bus_name(_music_bus)
 	_music.volume_db = -9.0
@@ -108,6 +111,15 @@ func play_dawn() -> void:
 	tw.tween_callback(_dawn.play).set_delay(1.2)
 	tw.tween_property(_dawn, "volume_db", -5.0, 4.0).set_delay(1.2)
 	tw.chain().tween_callback(_music.stop)
+
+
+## Sirène : plus forte quand la police est proche, plus aiguë quand elle se
+## rapproche (effet Doppler), muette hors poursuite.
+func update_siren(on: bool, distance: float, closing_speed: float, delta: float) -> void:
+	var target := clampf(40.0 / (40.0 + absf(distance)), 0.0, 1.0) if on else 0.0
+	_siren_level = move_toward(_siren_level, target, delta * (3.0 if on else 0.8))
+	_siren.volume_db = linear_to_db(_siren_level * 0.9 + 0.0001) - 3.0
+	_siren.pitch_scale = clampf(343.0 / (343.0 - closing_speed), 0.92, 1.08)
 
 
 func next_station() -> String:

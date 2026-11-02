@@ -308,6 +308,13 @@ deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
     choix FR/EN dans les réglages. Un banc vérifie que chaque texte du code est
     traduit avec les mêmes gabarits et qu'aucun écran anglais ne montre de
     français. Les nombres se groupent à l'anglaise (12,345).
+  - **Poursuites de police** (voir SCENARIO.md) : une patrouille par
+    région après l'autoroute, réveillée au-dessus de 200 km/h. Chasse avec
+    rattrapage tant qu'elle vous voit, charge annoncée (esquivable),
+    barrage roulant, trois touches = contrôle. Semée : prime, turbo plein.
+    Points ×1,5 pendant la poursuite, gyrophares qui éclairent la route
+    mouillée, pin-pon deux tons avec effet Doppler. Équilibrage : le pilote
+    auto atteint l'aube 27 fois sur 30 (2 s rendues par station).
   - Version web jouable sur iPhone (GitHub Pages), sans saccade : la route se
     construit par étapes quand le navigateur n'a pas de threads. Pause,
     premiers pas guidés, vibrations aux chocs (app).

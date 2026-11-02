@@ -17,6 +17,7 @@ const EVENT_NAMES := {
 	"stoppeuse": "L'auto-stoppeuse", "radio_live": "La radio parle de toi",
 	"panneau": "Le panneau qui se répète", "station_vide": "La station vide",
 	"fantome": "La voiture fantôme", "tunnel": "Le tunnel trop long",
+	"poursuite": "La poursuite",
 }
 const ENDING_HINTS := ["toujours à gauche", "une fois à droite", "deux fois à droite",
 		"trois fois à droite", "toujours à droite"]
@@ -129,6 +130,7 @@ func open_journal() -> void:
 	_text(Lang.t("Meilleur score : %s") % Hud._group(save.best), Hud.WHITE)
 	_text(Lang.t("Nuit du jour : %s") % Hud._group(int(save.daily.get(Main.today(), 0))), Hud.WHITE)
 	_text(Lang.t("Parties jouées : %d") % save.runs, Hud.DIM)
+	_text(Lang.t("Poursuites semées : %d   —   arrêté %d fois") % [save.pursuits_escaped, save.busted], Hud.DIM)
 	_root.visible = true
 
 

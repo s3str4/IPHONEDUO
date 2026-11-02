@@ -57,8 +57,15 @@ func start(s: float = 0.0) -> void:
 		next_station += 1
 
 
+## Poursuite en cours : tous les points comptent une fois et demie (le
+## risque paie).
+var pursuit := false
+const PURSUIT_MULTIPLIER := 1.5
+
+
 func multiplier() -> float:
-	return minf(1.0 + chain * RunConfig.CHAIN_STEP, RunConfig.MAX_MULTIPLIER)
+	return minf(1.0 + chain * RunConfig.CHAIN_STEP, RunConfig.MAX_MULTIPLIER) \
+			* (PURSUIT_MULTIPLIER if pursuit else 1.0)
 
 
 ## Étape en cours (0..SEGMENT_COUNT-1).

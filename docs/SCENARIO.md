@@ -50,6 +50,23 @@ dans la partie, qui change un détail de la fin.
 fille au pouce levé est assise sur le siège passager. C'est Lou, à dix-sept
 ans. « On rentre ? »
 
+## La police
+
+Marceau parle de vous à l'antenne (« la voiture rouge qui file vers
+l'aube ») et la gendarmerie écoute Radio Nuit. Dans chaque région après
+l'autoroute, une patrouille attend, garée derrière la glissière, phares
+éteints. Marceau vous prévient avant (« Moi, je n'ai rien dit ») : il est de
+votre côté. Passer devant elle à plus de 200 km/h, c'est la réveiller ;
+ralentir, c'est perdre du temps. Le choix est au joueur.
+
+Pendant la poursuite, les points comptent une fois et demie. La police
+charge (l'écran annonce la voie visée : on l'esquive en changeant de voie),
+se rabat devant pour vous ralentir, puis s'écarte. Trois touches : contrôle
+(papiers, ballon, lampe dans les yeux), la voiture repart de zéro. La semer
+(300 m d'avance, ou la fin de son secteur, à la région suivante) : prime,
+turbo plein, et Marceau soulagé. Trace dans la fin, si on l'a semée au
+moins une fois : « Loin derrière, des gyrophares s'éteignent un à un. »
+
 ## Les régions et leur réplique
 
 Chaque région a son titre (au centre de l'écran) et sa réplique de Marceau.

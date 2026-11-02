@@ -8,10 +8,28 @@ enum Driver { GOOD, CAUTIOUS, BLIND }
 
 ## Renvoie [gaz, braquage, turbo] pour cette image (turbo : vrai pour le
 ## déclencher, en ligne droite dégagée et loin des bifurcations).
-static func drive(car: CarPhysics, track: Track, traffic: Traffic, path: Array, driver: Driver) -> Array:
+static func drive(car: CarPhysics, track: Track, traffic: Traffic, path: Array, driver: Driver,
+		police: Police = null) -> Array:
 	var target := 0.0
 	if driver != Driver.BLIND:
 		target = traffic.best_lane(car)
+	# Un bon pilote esquive la police : quitter la voie qu'elle vise, ou celle
+	# où elle s'est rabattue devant.
+	if driver == Driver.GOOD and police != null and police.active():
+		var g := police.gap(car)
+		var danger := police.ram_x if police.state == Police.State.RAM else police.x
+		# Elle charge, elle bloque devant, ou elle est juste à côté : pas dans sa voie.
+		var threat := police.state in [Police.State.RAM, Police.State.AHEAD] and g > -40.0 and g < 16.0 \
+				or absf(g) < 7.0
+		if threat and absf(danger - target) < 2.5:
+			var best := target
+			var best_d := -1.0
+			for l in traffic.usable_lanes(car.s + 30.0):
+				var d := absf(l - danger)
+				if d > 2.5 and traffic.free_gap(car, l) > 40.0 and not traffic._blocked_beside(car, l) and d > best_d:
+					best = l
+					best_d = d
+			target = best
 	# Bifurcation devant : se placer du côté du chemin voulu.
 	for k in RouteMap.STAGES.size() - 1:
 		var f := RouteMap.fork_s(k)

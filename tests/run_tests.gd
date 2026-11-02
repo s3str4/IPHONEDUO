@@ -29,6 +29,7 @@ func _initialize() -> void:
 	await _test_car_feel()
 	await _test_thumb_input()
 	_test_ending_scenes()
+	_test_police()
 	await _test_english()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -930,3 +931,109 @@ func _texts(node: Node) -> Array:
 	for c in node.get_children():
 		out.append_array(_texts(c))
 	return out
+
+
+## Fait rouler `car` tout droit à vitesse constante (voie car.x) avec la police.
+func _police_run(police: Police, car: CarPhysics, traffic: Traffic, seconds: float,
+		speed: float, dodge := false) -> Array:
+	var events := []
+	for i in int(seconds * 60.0):
+		car.speed = speed if police.hold == 0.0 else car.speed
+		# Esquive : pendant l'annonce de la charge, changer de voie.
+		if dodge and police.state == Police.State.RAM and absf(police.ram_x - car.x) < 2.0:
+			car.x = -4.0 if car.x >= 0.0 else 4.0
+		car.s += car.speed / 60.0
+		for e in police.update(car, traffic, 1.0 / 60.0):
+			events.append(e)
+	return events
+
+
+func _test_police() -> void:
+	var police := Police.new(5)
+	var placed := true
+	for k in range(1, RouteMap.STAGES.size()):
+		var p: float = police.patrols[k]
+		if p < RouteMap.region_start(k) + 500.0 or p > RouteMap.fork_s(k) - 1500.0:
+			placed = false
+	_check(placed and not police.patrols.has(0) and Police.new(5).patrols == police.patrols,
+			"police : une patrouille par étape, loin des bifurcations, toujours la même")
+	var traffic := Traffic.new(5)
+	traffic.density = 0.0
+	# Passer devant à 190 km/h : rien. À 250 : poursuite.
+	var car := CarPhysics.new()
+	car.s = police.patrols[1] - 20.0
+	var ev := _police_run(police, car, traffic, 2.0, 190.0 / 3.6)
+	_check(ev.is_empty() and not police.active(), "police : sous 200 km/h, la patrouille reste garée")
+	police = Police.new(5)
+	police.patrols[3] = RouteMap.region_start(3) + 300.0
+	car = CarPhysics.new()
+	car.s = police.patrols[3] - 20.0
+	car.x = 0.0
+	ev = _police_run(police, car, traffic, 1.0, 250.0 / 3.6)
+	_check(ev.size() == 1 and ev[0].type == "start" and police.active(), "police : au-dessus, poursuite")
+	# À 280 km/h sans esquiver, elle rattrape et percute ; trois fois, arrêté.
+	ev = _police_run(police, car, traffic, 60.0, CarPhysics.TOP_SPEED)
+	var types := ev.map(func(e: Dictionary) -> String: return e.type)
+	_check(types.count("contact") == Police.STRIKES_TO_BUST and types.has("busted") and police.busts == 1,
+			"police : plus rapide que vous, trois touches et c'est le contrôle", str(types))
+	# En changeant de voie quand elle charge, on l'évite.
+	police = Police.new(5)
+	police.patrols[3] = RouteMap.region_start(3) + 300.0
+	car = CarPhysics.new()
+	car.s = police.patrols[3] - 20.0
+	ev = _police_run(police, car, traffic, 1.0, 250.0 / 3.6)
+	ev = _police_run(police, car, traffic, 55.0, CarPhysics.TOP_SPEED, true)
+	types = ev.map(func(e: Dictionary) -> String: return e.type)
+	_check(not types.has("busted") and police.time > 30.0, "police : esquiver la charge marche",
+			str(ev.map(func(e: Dictionary) -> String: return e.type + ":" + str(e.get("from", "")))))
+	# Sous turbo, on la sème ; et elle abandonne en sortant de son secteur.
+	police = Police.new(5)
+	car = CarPhysics.new()
+	car.s = police.patrols[1] - 20.0
+	_police_run(police, car, traffic, 1.0, 250.0 / 3.6)
+	ev = _police_run(police, car, traffic, 30.0, CarPhysics.TOP_SPEED * RunConfig.TURBO_SPEED)
+	_check(ev.size() > 0 and ev.back().type == "escaped" and ev.back().why == "distance",
+			"police : sous turbo, on la distance", str(ev.back() if ev.size() > 0 else {}))
+	police = Police.new(5)
+	car = CarPhysics.new()
+	car.s = RouteMap.fork_s(1) + RouteMap.DIVIDER_END - 400.0
+	police.patrols[1] = car.s + 10.0
+	_police_run(police, car, traffic, 1.0, 250.0 / 3.6)
+	ev = _police_run(police, car, traffic, 10.0, 60.0)
+	_check(ev.size() > 0 and ev.back().type == "escaped" and ev.back().why == "secteur",
+			"police : hors de son secteur, elle abandonne", str(ev))
+	var game := GameRun.new()
+	game.start(0.0)
+	var before := game.score
+	police.apply(ev.back(), game)
+	_check(game.score > before and game.turbo >= 1.0 and not game.pursuit,
+			"police : la semer paie (prime, turbo plein)")
+	# Elle ne traverse jamais le trafic : simulation complète, chevauchements comptés.
+	var overlaps := 0
+	var frames := 0
+	for seed in [1, 2]:
+		var track := Track.new(seed, true)
+		var c := CarPhysics.new()
+		var tr := Traffic.new(seed)
+		var pol := Police.new(seed)
+		var g := GameRun.new()
+		g.start(0.0)
+		for i in 60 * 260:
+			tr.density = RunConfig.TRAFFIC_DENSITY[g.segment()]
+			var cmd := Autopilot.drive(c, track, tr, [0, 0, 0, 0], Autopilot.Driver.GOOD, pol)
+			c.step(track, 0.0 if pol.hold > 0.0 else cmd[0], cmd[1], 1.0 / 60.0)
+			tr.update(c, 1.0 / 60.0)
+			for e in pol.update(c, tr, 1.0 / 60.0):
+				pol.apply(e, g)
+			g.update(c.s, c.x, false, 1.0 / 60.0)
+			track.choices.assign(g.choices)
+			track.ensure(c.s + 600.0)
+			track.trim(c.s - 300.0)
+			if pol.active():
+				frames += 1
+				for v in tr.vehicles:
+					if absf(v.s - pol.s) < v.half_length() + Police.HALF_LENGTH - 0.3 \
+							and absf(v.x - pol.x) < v.half_width() + Police.HALF_WIDTH - 0.3:
+						overlaps += 1
+	_check(frames > 60 * 30 and overlaps < frames / 200, "police : ne traverse pas le trafic",
+			"%d images en poursuite, %d chevauchements" % [frames, overlaps])

@@ -12,7 +12,7 @@ const SEGMENT_COUNT := 5
 ## rouler fort et éviter le trafic (chaque choc coûte 3 à 4 s). Le pilote
 ## automatique du banc (réflexes parfaits) arrive avec 20 à 50 s d'avance.
 const START_TIME := 88.0
-const STATION_TIME := [77.0, 76.0, 75.0, 74.0]
+const STATION_TIME := [79.0, 78.0, 77.0, 76.0]
 ## Nombre moyen de véhicules par kilomètre, par étape.
 const TRAFFIC_DENSITY := [5.0, 6.5, 8.0, 9.0, 10.0]
 const DESTINATION := "La Mer"

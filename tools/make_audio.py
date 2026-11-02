@@ -344,6 +344,22 @@ def lofi():
     return reverb(track, 1.4, 0.22)
 
 
+def siren():
+    """Pin-pon de la gendarmerie, deux tons (la 435 Hz, ré 580 Hz), 0,5 s
+    chacun ; boucle de 2 s. Timbre de trompe : carré adouci, un peu nasal."""
+    # 2,05 s rendues, dont 0,05 fondues sur le début : boucle de 2 s pile.
+    length = 2.05
+    t = t_axis(length)
+    tone = np.where((t % 1.0) < 0.5, 435.0, 580.0)
+    # Glissement bref entre les deux tons, comme une vraie trompe.
+    k = int(SR * 0.02)
+    tone = np.convolve(tone, np.ones(k) / k, mode="same")
+    phase = 2 * np.pi * np.cumsum(tone) / SR
+    x = np.tanh(3.0 * np.sin(phase)) + 0.25 * np.sin(2 * phase + 0.4)
+    x = fft_filter(x, 300, 3500)
+    return seamless(np.stack([x, x], axis=1), 0.05)
+
+
 def dawn():
     """Aube (scènes de fin) : 26 s sans boucle. Une nappe qui s'ouvre lentement
     (D maj7, B m9, G maj7, A sus4 puis A), des cloches douces qui égrènent
@@ -402,6 +418,7 @@ def main():
     save("music_synthwave", synthwave(), loop=True)
     save("music_lofi", lofi(), loop=True)
     save("dawn", dawn())
+    save("siren", siren(), loop=True)
 
 
 if __name__ == "__main__":

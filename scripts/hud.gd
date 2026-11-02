@@ -51,6 +51,16 @@ var _turbo_fill: ColorRect
 var _turbo_label: Label
 ## Scène de fin : bandes noires, plus de compteurs.
 var _cinema := false
+## Poursuite : bandeau, témoins de touches, distance, alerte d'éperonnage.
+var _pursuit: Control
+var _pursuit_label: Label
+var _pursuit_dist: Label
+var _pips: Array[ColorRect] = []
+var _ram_bar: ColorRect
+var _ram_label: Label
+var _pursuit_time := 0.0
+const SIREN_RED := Color(1.0, 0.25, 0.22)
+const SIREN_BLUE := Color(0.35, 0.55, 1.0)
 var _bars: Array[ColorRect] = []
 var _paused := false
 
@@ -161,6 +171,28 @@ func _ready() -> void:
 	_turbo_fill.color = PINK
 	_turbo_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_turbo_back.add_child(_turbo_fill)
+	# Poursuite.
+	_pursuit = Control.new()
+	_pursuit.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pursuit.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pursuit.visible = false
+	_play.add_child(_pursuit)
+	_pursuit_label = _label(_pursuit, "POURSUITE", arcade_font(), 11, SIREN_RED, Vector2(0, 56), HORIZONTAL_ALIGNMENT_CENTER, true)
+	for i in Police.STRIKES_TO_BUST:
+		var pip := ColorRect.new()
+		pip.size = Vector2(14, 4)
+		pip.position = Vector2(135.0 - 25.0 + i * 18.0, 76)
+		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_pursuit.add_child(pip)
+		_pips.append(pip)
+	_pursuit_dist = _label(_pursuit, "", text_font(true), 9, DIM, Vector2(0, 82), HORIZONTAL_ALIGNMENT_CENTER, true)
+	_ram_bar = ColorRect.new()
+	_ram_bar.size = Vector2(70, 5)
+	_ram_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ram_bar.visible = false
+	_play.add_child(_ram_bar)
+	_ram_label = _label(_play, "ELLE CHARGE", text_font(true), 9, WHITE, Vector2(0, 0), HORIZONTAL_ALIGNMENT_CENTER)
+	_ram_label.visible = false
 	_turbo_label = _label(_play, "TURBO", text_font(true), 8, PINK, Vector2(203, -10), HORIZONTAL_ALIGNMENT_LEFT, false, true)
 
 	# Directions à la prochaine bifurcation.
@@ -322,6 +354,27 @@ func title_card(text: String) -> void:
 	tw.tween_property(_card, "modulate:a", 1.0, 0.4)
 	tw.tween_interval(2.2)
 	tw.tween_property(_card, "modulate:a", 0.0, 0.8)
+
+
+## Poursuite : gap (m, positif derrière vous), touches reçues, et pendant
+## l'éperonnage, le côté visé (-1 gauche, 0 votre voie, 1 droite).
+func set_pursuit(on: bool, strikes: int, gap: float, ram_side: int, delta: float) -> void:
+	_pursuit.visible = on
+	_pursuit_time += delta
+	var red := PoliceView.red_on(_pursuit_time)
+	_pursuit_label.label_settings.font_color = SIREN_RED if red else SIREN_BLUE
+	for i in _pips.size():
+		_pips[i].color = SIREN_RED if i < strikes else Color(1, 1, 1, 0.18)
+	_pursuit_dist.text = Lang.t("%d M DERRIÈRE") % int(gap) if gap >= 0.0 else Lang.t("DEVANT VOUS")
+	var charging := on and ram_side != 99
+	_ram_bar.visible = charging and fmod(_pursuit_time, 0.24) < 0.16
+	_ram_label.visible = charging
+	if charging:
+		var cx := 135.0 + ram_side * 80.0
+		_ram_bar.position = Vector2(cx - 35.0, 384.0)
+		_ram_bar.color = SIREN_RED if red else SIREN_BLUE
+		_ram_label.position = Vector2(cx - 50.0, 368.0)
+		_ram_label.size.x = 100.0
 
 
 ## Jauge du turbo (0..1) ; elle clignote quand elle est pleine, et se vide

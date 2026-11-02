@@ -35,6 +35,13 @@ const RADIO := {
 	"fantome": "La voiture à côté de vous, phares éteints... Elle ressemblait à la vôtre. Il y a dix ans.",
 	"station_vide": "Une station vide. Tout est allumé. Personne. Une seule pompe décrochée, qui pend.",
 	"tunnel": "Ce tunnel est trop long. Le temps s'est arrêté, on dirait. Profitez-en.",
+	# La police (voir Police) : Marceau est de votre côté.
+	"patrouille": "Entre nous : une patrouille attend plus loin, au bord de la route. Au-dessus de 200, elle vous prend en chasse. Moi, je n'ai rien dit.",
+	"patrouille2": "Encore une patrouille devant. Ils écoutent la radio, maintenant. À vous de voir.",
+	"poursuite": "Ils ont entendu l'antenne : une voiture rouge qui file vers l'aube. Ne vous laissez pas toucher. Trois fois, c'est le contrôle.",
+	"seme_distance": "Plus de gyrophares dans le rétro. Ils vous ont perdu. Respirez.",
+	"seme_secteur": "Fin de leur secteur : ils font demi-tour. La nuit est à vous.",
+	"arrete": "Contrôle. Papiers, ballon, lampe dans les yeux... Ils vous laissent repartir. Le jour, lui, n'a pas attendu.",
 }
 
 ## Messages vocaux de Lou, un par tronçon : reçus à la station qui le termine
@@ -73,6 +80,7 @@ const DETAILS := {
 	"stoppeuse": " Elle a gardé le même blouson que la fille au bord de la route.",
 	"fantome": " Sur le parking, une vieille voiture rouge, phares éteints.",
 	"radio_live": " À la radio, Marceau dit simplement : « Bien arrivé. »",
+	"poursuite": " Loin derrière, sur la route, des gyrophares s'éteignent un à un.",
 }
 
 ## Épilogue de Nulle Part, quand on a vu au moins EPILOGUE_FLAGS événements.
@@ -86,7 +94,7 @@ static func ending_text(ending: int, flags: Dictionary) -> String:
 	if ending == 4 and flags.size() >= EPILOGUE_FLAGS:
 		details = EPILOGUE
 	else:
-		for key in ["stoppeuse", "fantome", "radio_live"]:
+		for key in ["stoppeuse", "fantome", "radio_live", "poursuite"]:
 			if flags.has(key):
 				details = DETAILS[key]
 				break

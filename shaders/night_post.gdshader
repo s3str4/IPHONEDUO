@@ -10,6 +10,8 @@ uniform float rain = 1.0;
 uniform float speed = 0.0;
 // Choc (0..1, retombe vite) : flash chaud et aberration.
 uniform float hit = 0.0;
+// Police dans le dos : lueur de gyrophare (couleur, force) sur les bords bas.
+uniform vec4 siren = vec4(0.0);
 uniform float vignette = 0.45;
 uniform float grain = 0.035;
 uniform float exposure = 1.08;
@@ -81,6 +83,10 @@ void fragment() {
 	c *= mix(shadow_tint, light_tint, smoothstep(0.05, 0.6, lum));
 	c = mix(vec3(lum), c, 1.12);
 	c = c * c * (3.0 - 2.0 * c) * 0.25 + c * 0.75;
+	// Gyrophares derrière : les bords de l'écran (surtout en bas) se teintent.
+	vec2 sq = SCREEN_UV - vec2(0.5, 1.05);
+	float rim = smoothstep(0.25, 0.75, length(sq * vec2(1.6, 1.0)));
+	c += siren.rgb * siren.a * rim * 0.55;
 	// Vignette et grain.
 	vec2 q = SCREEN_UV - 0.5;
 	c *= 1.0 - vignette * dot(q, q) * 2.0;

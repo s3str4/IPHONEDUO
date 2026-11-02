@@ -71,8 +71,8 @@ const EN := {
 	"AU TERRE-PLEIN, CHOISIS TON CÔTÉ": "AT THE SPLIT, PICK YOUR SIDE",
 	"STATION %d": "STATION %d",
 	"NOUVEAU — ": "NEW — ",
-	"%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/6\n%s\n+%s CRÉDITS%s":
-			"%s\n\n%s\n\n%sSCORE %s\nTIME BONUS %s\nEVENTS %d/6\n%s\n+%s CREDITS%s",
+	"%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/%d\n%s\n+%s CRÉDITS%s":
+			"%s\n\n%s\n\n%sSCORE %s\nTIME BONUS %s\nEVENTS %d/%d\n%s\n+%s CREDITS%s",
 	"NOUVELLE FIN ! ": "NEW ENDING! ",
 	"NOUVEAU RECORD !": "NEW RECORD!",
 	"RECORD %s": "BEST %s",
@@ -183,6 +183,34 @@ const EN := {
 	"ELLE VOUS\nATTEND": "SHE IS\nWAITING",
 	"STATION\n1 km": "GAS\n1 km",
 	"AUBE": "DAWN",
+
+	# --- Police -------------------------------------------------------------------------
+	"POURSUITE": "PURSUIT",
+	"POURSUITE !": "PURSUIT!",
+	"ELLE CHARGE": "RAM INCOMING",
+	"%d M DERRIÈRE": "%d M BEHIND",
+	"DEVANT VOUS": "AHEAD OF YOU",
+	"QUAND ELLE CHARGE, CHANGE DE VOIE": "WHEN THEY RAM, SWITCH LANES",
+	"TOUCHÉ %d/%d": "HIT %d/%d",
+	"ARRÊTÉ !": "BUSTED!",
+	"SEMÉE ! +%s": "ESCAPED! +%s",
+	"TURBO PLEIN": "TURBO FULL",
+	"La poursuite": "The pursuit",
+	"Poursuites semées : %d   —   arrêté %d fois": "Pursuits escaped: %d   —   busted %d times",
+	"Entre nous : une patrouille attend plus loin, au bord de la route. Au-dessus de 200, elle vous prend en chasse. Moi, je n'ai rien dit.":
+			"Between us: there's a patrol car waiting up ahead by the road. Go over 200 and they'll come after you. You didn't hear it from me.",
+	"Encore une patrouille devant. Ils écoutent la radio, maintenant. À vous de voir.":
+			"Another patrol up ahead. They listen to the radio now. Your call.",
+	"Ils ont entendu l'antenne : une voiture rouge qui file vers l'aube. Ne vous laissez pas toucher. Trois fois, c'est le contrôle.":
+			"They heard it on air: a red car racing toward dawn. Don't let them touch you. Three hits and they pull you over.",
+	"Plus de gyrophares dans le rétro. Ils vous ont perdu. Respirez.":
+			"No more flashing lights in the mirror. They lost you. Breathe.",
+	"Fin de leur secteur : ils font demi-tour. La nuit est à vous.":
+			"End of their patch: they're turning back. The night is yours.",
+	"Contrôle. Papiers, ballon, lampe dans les yeux... Ils vous laissent repartir. Le jour, lui, n'a pas attendu.":
+			"Pulled over. License, breathalyzer, flashlight in your eyes... They let you go. Daylight didn't wait.",
+	" Loin derrière, sur la route, des gyrophares s'éteignent un à un.":
+			" Far behind, on the road, flashing lights go out one by one.",
 	"VOUS ÊTES\nICI": "YOU ARE\nHERE",
 
 	# --- Radio Nuit : Marceau ---------------------------------------------------------------

@@ -104,6 +104,9 @@ var _rain := 1.0
 
 @onready var car_view: CarView = $Car
 @onready var traffic_view: TrafficView = $Traffic
+var police: Police
+var police_view: PoliceView
+var _patrol_said := {}
 @onready var camera: Camera3D = $Camera
 @onready var input: ThumbInput = $ThumbInput
 @onready var hud: Hud = $Hud
@@ -178,6 +181,9 @@ func _ready() -> void:
 	Hud.arcade_font()
 	Halo.material()
 	traffic = Traffic.new(seed)
+	police = Police.new(seed)
+	police_view = PoliceView.new()
+	add_child(police_view)
 	_sky_material = environment.sky.sky_material
 	_ambient_base = ProjectSettings.get_setting("shader_globals/sky_ambient")["value"]
 	_post_material = $Post/Screen.material
@@ -378,6 +384,10 @@ func _start() -> void:
 		return
 	hud.hide_overlay()
 	game.start(car.s)
+	# Captures : poursuite lancée tout de suite, police juste derrière (--police_demo).
+	if _args.has("police_demo"):
+		police.patrols[RouteMap.stage_at(car.s)] = car.s + 1.0
+		car.speed = 70.0
 	if not _args.has("autopilot"):
 		save.runs += 1
 		_write_save()
@@ -408,7 +418,7 @@ func _physics_process(delta: float) -> void:
 	var throttle := input.throttle
 	var steer := input.steer
 	if _args.has("autopilot"):
-		var cmd := Autopilot.drive(car, track, traffic, _path, Autopilot.Driver.GOOD)
+		var cmd := Autopilot.drive(car, track, traffic, _path, Autopilot.Driver.GOOD, police)
 		throttle = cmd[0]
 		steer = cmd[1]
 		if cmd[2]:
@@ -419,7 +429,8 @@ func _physics_process(delta: float) -> void:
 		game.on_draft(delta)
 	car.boost = (RunConfig.TURBO_SPEED if game.is_boosting() else 1.0) * (RunConfig.DRAFT_SPEED if drafting else 1.0)
 	car.accel_boost = RunConfig.TURBO_ACCEL if game.is_boosting() else 1.0
-	if game.state != GameRun.State.RUNNING:
+	# Contrôle de police : arrêté le temps du contrôle.
+	if game.state != GameRun.State.RUNNING or police.hold > 0.0:
 		throttle = 0.0
 
 	var prev_speed := car.speed
@@ -444,6 +455,10 @@ func _physics_process(delta: float) -> void:
 			Input.vibrate_handheld(90)
 		else:
 			game.on_near_miss()
+	if game.state == GameRun.State.RUNNING:
+		for e in police.update(car, traffic, delta, builder.water_side(car.s)):
+			police.apply(e, game)
+			_on_police(e)
 	_update_events()
 	game.update(car.s, car.x, absf(car.slip) > 0.12 and car.speed > 45.0, delta)
 	_prev_s = car.s
@@ -469,6 +484,17 @@ func _process(delta: float) -> void:
 	_worst_chunk_usec = maxi(_worst_chunk_usec, Time.get_ticks_usec() - t_chunks)
 	_place_car_and_camera(delta)
 	traffic_view.sync(traffic, track)
+	police_view.sync(police, car, track, builder.water_side, delta)
+	var ram_side := 99
+	if police.state == Police.State.RAM:
+		var dx := police.ram_x - car.x
+		ram_side = -1 if dx < -2.0 else (1 if dx > 2.0 else 0)
+	hud.set_pursuit(police.active() or police.hold > 0.0, police.strikes, police.gap(car), ram_side, delta)
+	audio.update_siren(police.active() or police.hold > 0.0, police.gap(car), police.speed - car.speed, delta)
+	# Plus elle est près, plus les bords de l'écran clignotent rouge et bleu.
+	var near := clampf(1.0 - absf(police.gap(car)) / 80.0, 0.0, 1.0) if police.active() or police.hold > 0.0 else 0.0
+	var sc: Color = PoliceView.RED if PoliceView.red_on(_time) else PoliceView.BLUE
+	_post_material.set_shader_parameter("siren", Color(sc.r, sc.g, sc.b, near * near))
 	car_view.set_lighting(builder.lamp_light(car.s, car.x), input.throttle == 0.0 and not _args.has("autopilot"), delta)
 	hud.set_values(game.time_left, game.score, game.segment(), game.multiplier(), car.speed_kmh(), game.progress())
 	hud.set_turbo(game.turbo, game.turbo_left / game.turbo_duration)
@@ -494,6 +520,9 @@ func _process(delta: float) -> void:
 		if not _chunks.has(i):
 			_late_frames += 1
 			break
+	# Journal de la poursuite (captures : trouver le bon moment).
+	if _args.has("police_log") and police.active() and Engine.get_process_frames() % 15 == 0:
+		print("police t %.2f %s écart %.1f x %.1f/%.1f" % [_time, Police.State.keys()[police.state], police.gap(car), police.x, car.x])
 	if _args.has("capture") and _time >= float(_args.get("capture_at", "6")):
 		print("état %d  s %.1f  ancre %.1f  fin %d  t %.1f/%.1f" % [game.state, car.s, _anchor, game.ending, _time, _end_time])
 		print("tronçons en retard : %d images ; pire construction dans une image : %.1f ms" % [
@@ -620,6 +649,7 @@ func _update_lighting(delta: float) -> void:
 	if neon != Color.BLACK:
 		sources.append([car_view.global_position + Vector3.UP * 0.25, neon, 7.0, 3.0])
 	sources.append_array(_ending.get("lights", []))
+	sources.append_array(police_view.light_sources())
 	_lights.update(sources, cam, delta)
 	var t := track.transform_at(car.s, car.x)
 	var fwd := -car_view.global_transform.basis.z
@@ -667,6 +697,12 @@ func _update_fork_prompt() -> void:
 func _update_events() -> void:
 	if game.state != GameRun.State.RUNNING:
 		return
+	# Marceau prévient : une patrouille plus loin (la première fois en détail).
+	var k := RouteMap.stage_at(car.s)
+	if police.patrols.has(k) and not _patrol_said.has(k) and not police.woken(k) \
+			and car.s > police.patrols[k] - 900.0 and not police.active():
+		_patrol_said[k] = true
+		_say(Scenario.RADIO["patrouille" if _patrol_said.size() == 1 else "patrouille2"], police.patrols[k])
 	for name in _events.crossed(_prev_s, car.s):
 		game.set_flag(name)
 		match name:
@@ -691,6 +727,36 @@ func _update_events() -> void:
 	if game.time_left < 12.0 and not _low_time_said:
 		_low_time_said = true
 		_say(Scenario.RADIO["low_time"])
+
+
+## Poursuite : chaque événement se voit, s'entend et se commente.
+func _on_police(e: Dictionary) -> void:
+	match e.type:
+		"start":
+			hud.popup("POURSUITE !", Hud.RED, 18, 196.0)
+			_say(Scenario.RADIO["poursuite"])
+			Input.vibrate_handheld(80)
+			if save.runs <= 3 or not save.events_seen.has("poursuite"):
+				hud.hint("QUAND ELLE CHARGE, CHANGE DE VOIE")
+		"contact":
+			_shake = 0.5
+			_impact(signf(car.x - police.x), 0.7)
+			audio.play("crash", -3.0)
+			Input.vibrate_handheld(120)
+			if e.strikes < Police.STRIKES_TO_BUST:
+				hud.popup(Lang.t("TOUCHÉ %d/%d") % [e.strikes, Police.STRIKES_TO_BUST], Hud.RED, 10, 226.0)
+		"busted":
+			hud.popup("ARRÊTÉ !", Hud.RED, 18, 196.0)
+			_say(Scenario.RADIO["arrete"])
+			audio.play("thud", 0.0)
+			save.busted += 1
+		"escaped":
+			game.set_flag("poursuite")
+			save.pursuits_escaped += 1
+			hud.popup(Lang.t("SEMÉE ! +%s") % Hud._group(Police.escape_points(police.stage, e.time)), Hud.AMBER, 18, 196.0)
+			hud.popup("TURBO PLEIN", Hud.PINK, 9, 222.0)
+			_say(Scenario.RADIO["seme_secteur" if e.why == "secteur" else "seme_distance"])
+			audio.play("chime", -4.0)
 
 
 func _on_station(index: int, added: float) -> void:
@@ -727,11 +793,13 @@ func _on_arrived(bonus: int) -> void:
 	var earned := _earn_credits()
 	_write_save()
 	_begin_ending_scene()
+	police.state = Police.State.DONE
+	game.pursuit = false
 	_ending_overlay = [RouteMap.ENDINGS[game.ending],
-			Lang.t("%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/6\n%s\n+%s CRÉDITS%s") % [
+			Lang.t("%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/%d\n%s\n+%s CRÉDITS%s") % [
 				Scenario.ending_text(game.ending, game.flags), lou,
 				Lang.t("NOUVELLE FIN ! ") if first_time else "", Hud._group(int(game.score)), Hud._group(bonus),
-				game.flags.size(), Lang.t("NOUVEAU RECORD !") if record else Lang.t("RECORD %s") % Hud._group(save.best),
+				game.flags.size(), Menus.EVENT_NAMES.size(), Lang.t("NOUVEAU RECORD !") if record else Lang.t("RECORD %s") % Hud._group(save.best),
 				Hud._group(earned), Lang.t("  —  nouvelle teinte au garage") if first_time else ""],
 			"TOUCHE POUR REJOUER"]
 	_overlay_at = _time + ENDING_SCENE_TIME
