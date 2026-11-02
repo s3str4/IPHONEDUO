@@ -47,7 +47,7 @@ Options (Projet > Paramètres > Exécution, ou en ligne de commande après `--`)
 `--menu=garage` (ouvre un écran du titre), `--storm_at=5` (éclair à 5 s),
 `--sliced` (route construite par étapes, comme dans le navigateur),
 `--ghost` (fantôme du record même en pilote automatique), `--record_ghost`, `--ghost_log`,
-`--render_h=N` (hauteur de l'image 3D), `--police_demo` (poursuite dès le départ), `--police_log` (journal de la poursuite),
+`--render_h=N` (hauteur de l'image 3D), `--share_card=chemin.png` (enregistre la carte de fin), `--police_demo` (poursuite dès le départ), `--police_log` (journal de la poursuite),
 `--lang=en` ou `--lang=fr` (langue ; sinon celle du système ou des réglages).
 Sur la version web, les mêmes options passent par l'adresse :
 `?lang=en`, `?autopilot&path=1000&start_s=25850`.

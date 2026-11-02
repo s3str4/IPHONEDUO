@@ -186,6 +186,13 @@ const EN := {
 
 	# --- Police -------------------------------------------------------------------------
 	"POURSUITE": "PURSUIT",
+	"PARTAGER": "SHARE",
+	"%s POINTS": "%s POINTS",
+	"J'AI VU L'AUBE": "I SAW THE DAWN",
+	"LA NUIT GAGNE": "THE NIGHT WINS",
+	"Étape %d sur %d — %.1f km": "Stage %d of %d — %.1f km",
+	"J'ai vu l'aube sur %s dans Route de Nuit : %s points.": "I saw the dawn over %s in Night Road: %s points.",
+	"La nuit m'a rattrapé à l'étape %d dans Route de Nuit : %s points.": "The night caught me at stage %d in Night Road: %s points.",
 	"LE FANTÔME A PRIS L'AUTRE ROUTE": "THE GHOST TOOK THE OTHER ROAD",
 	"FANTÔME DU RECORD : %s": "RECORD GHOST: %s",
 	"POURSUITE !": "PURSUIT!",

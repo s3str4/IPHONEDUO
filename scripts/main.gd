@@ -104,6 +104,7 @@ var _ghost_rec: Ghost
 var _ghost_lost := false
 var _run_time := 0.0
 var _seed := 1
+var _share: ShareCard
 ## Brouillard et météo courants, qui glissent vers ceux de l'ambiance.
 var _fog_scale := 1.0
 var _fog_tint := NIGHT_FOG
@@ -223,6 +224,11 @@ func _ready() -> void:
 	menus.garage_changed.connect(func() -> void:
 		_apply_garage()
 		_write_save())
+	hud.share_pressed.connect(func() -> void:
+		if _share != null:
+			var how := _share.share()
+			if not OS.has_feature("web"):
+				hud.popup(how.get_file(), Hud.WHITE, 8, 120.0))
 	hud.title_pressed.connect(func() -> void:
 		get_tree().paused = false
 		daily_mode = false
@@ -608,6 +614,9 @@ func _update_ending(delta: float) -> void:
 	_sky_material.set_shader_parameter("zenith", DAWN_ZENITH.lerp(Color(0.3, 0.42, 0.66), warm))
 	RenderingServer.global_shader_parameter_set("fog_color", DAWN_FOG.lerp(Color(0.8, 0.56, 0.5), warm))
 	if _time >= _overlay_at and not _ending_overlay.is_empty():
+		var title: String = Lang.t(RouteMap.ENDINGS[game.ending])
+		_make_share_card(title, Lang.t("J'AI VU L'AUBE"), PoliceView.BLUE.lerp(Hud.AMBER, 0.85),
+				Lang.t("J'ai vu l'aube sur %s dans Route de Nuit : %s points.") % [title.to_lower(), Lang.group(int(game.score))])
 		hud.show_overlay(_ending_overlay[0], _ending_overlay[1], _ending_overlay[2])
 		_ending_overlay = []
 
@@ -871,6 +880,22 @@ func _update_ghost() -> void:
 	hud.set_ghost(Lang.t("RECORD %s") % txt, gap <= 0.0)
 
 
+## Carte à partager : l'image de la scène telle qu'elle est (avant que le
+## panneau de fin ne la couvre), composée en arrière-plan.
+func _make_share_card(headline: String, detail: String, accent: Color, text: String) -> void:
+	var scene := get_viewport().get_texture().get_image()
+	if scene == null or scene.is_empty():
+		return
+	_share = ShareCard.new()
+	add_child(_share)
+	_share.ready_to_share.connect(func() -> void:
+		hud.show_share(true)
+		if _args.has("share_card"):
+			var f := FileAccess.open(str(_args["share_card"]), FileAccess.WRITE)
+			f.store_buffer(_share.png))
+	_share.compose(scene, headline, detail, int(game.score), accent, text)
+
+
 ## Fin de partie : si elle bat le fantôme (au score), elle devient le fantôme.
 func _save_ghost() -> void:
 	if _args.has("autopilot") and not _args.has("record_ghost"):
@@ -890,6 +915,8 @@ func _on_time_up() -> void:
 	var earned := _earn_credits()
 	_write_save()
 	_save_ghost()
+	_make_share_card(Lang.t("LA NUIT GAGNE"), Lang.t("Étape %d sur %d — %.1f km") % [game.segment() + 1, RunConfig.SEGMENT_COUNT, car.s / 1000.0],
+			Hud.PINK, Lang.t("La nuit m'a rattrapé à l'étape %d dans Route de Nuit : %s points.") % [game.segment() + 1, Lang.group(int(game.score))])
 	hud.show_overlay("LA NUIT\nGAGNE",
 			Lang.t("\nÉTAPE %d SUR %d\n%.1f KM\n\nSCORE %s\n\n%s\n+%s CRÉDITS") % [
 				game.segment() + 1, RunConfig.SEGMENT_COUNT, car.s / 1000.0, Hud._group(int(game.score)),

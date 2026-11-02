@@ -46,6 +46,7 @@ var _fork_right: Label
 var _card: Label
 var _hint: Label
 var _title_button: Button
+var _share_button: Button
 var _turbo_back: ColorRect
 var _turbo_fill: ColorRect
 var _turbo_label: Label
@@ -77,6 +78,7 @@ signal daily_pressed
 signal garage_pressed
 ## Retour à l'écran titre (fin de partie, pause).
 signal title_pressed
+signal share_pressed
 
 
 ## Chiffres et titres (Audiowide).
@@ -314,6 +316,14 @@ func _ready() -> void:
 	_title_button.add_theme_color_override("font_color", DIM)
 	_title_button.pressed.connect(func() -> void: title_pressed.emit())
 	_overlay.add_child(_title_button)
+	_share_button = _title_button.duplicate()
+	_share_button.text = Lang.t("PARTAGER")
+	_share_button.add_theme_color_override("font_color", AMBER)
+	_share_button.position = Vector2(55, 430)
+	_share_button.size = Vector2(80, 24)
+	_share_button.visible = false
+	_share_button.pressed.connect(func() -> void: share_pressed.emit())
+	_overlay.add_child(_share_button)
 	_overlay.visible = false
 
 
@@ -479,6 +489,12 @@ func hint(text: String) -> void:
 	tw.tween_property(_hint, "modulate:a", 1.0, 0.3)
 	tw.tween_interval(3.2)
 	tw.tween_property(_hint, "modulate:a", 0.0, 0.6)
+
+
+## Bouton PARTAGER de l'écran de fin (quand la carte est prête).
+func show_share(on: bool) -> void:
+	_share_button.visible = on
+	_title_button.position.x = 145.0 if on else 105.0
 
 
 func show_pause(on: bool) -> void:

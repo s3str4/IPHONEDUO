@@ -820,7 +820,8 @@ func _test_ending_scenes() -> void:
 
 
 ## Textes qui ne s'affichent jamais (bus audio, noms de nœuds).
-const NOT_SHOWN := ["Bruitages", "Musique", "Master", "EndingScene", "Chunk%d", "II", "La Mer"]
+const NOT_SHOWN := ["Bruitages", "Musique", "Master", "EndingScene", "Chunk%d", "II", "La Mer",
+		"https://s3str4.github.io/IPHONEDUO/"]
 ## Lettres et signes qui trahissent du français resté à l'écran.
 const FRENCH_MARKS := "éèêëàâçôûùîïœÉÈÊÀÂÇÔÛÎ«»"
 

@@ -321,6 +321,9 @@ deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
     Réglage pour le masquer.
   - **Netteté iPhone** : interface à 2x la densité, 3D à 720/860/1000 lignes
     selon la qualité.
+  - **Carte de score à partager** : en fin de partie, une image (la scène de
+    l'aube ou la route, le logo, la destination, le score, l'adresse du
+    jeu) part dans le menu de partage du téléphone avec un texte.
   - Version web jouable sur iPhone (GitHub Pages), sans saccade : la route se
     construit par étapes quand le navigateur n'a pas de threads. Pause,
     premiers pas guidés, vibrations aux chocs (app).
