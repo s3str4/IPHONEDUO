@@ -10,6 +10,14 @@ Moteur : Godot 4.7 (renderer Compatibility), export iOS.
 
 ## Jouer
 
+**Sur iPhone (ou tout navigateur)** : la version web est publiée sur GitHub Pages
+à chaque poussée sur `main` (`.github/workflows/web.yml`) :
+<https://s3str4.github.io/IPHONEDUO/> — ajouter `?fps` à l'adresse pour afficher
+les images par seconde. Dans Safari : Partager > « Sur l'écran d'accueil » pour
+la lancer en plein écran comme une app.
+
+**Sur PC** :
+
 1. Ouvrir Godot 4.7, « Importer », choisir `project.godot`.
 2. Appuyer sur **F5**.
 

@@ -9,6 +9,8 @@ extends Node3D
 ##   --start_s=M        démarre à M mètres (captures de l'aube, des stations) ;
 ##                      les bifurcations sautées suivent --path
 ##   --showcase         écran de titre sans interface (captures de la voiture)
+##   --fps              affiche les images par seconde (essais sur iPhone)
+## Dans la version web, les mêmes options passent par l'adresse : ?fps&seed=3
 ##   --capture=PATH     enregistre une image PNG puis quitte
 ##   --capture_at=SEC   instant de la capture (défaut 6)
 
@@ -83,10 +85,17 @@ var _rain := 1.0
 
 var _lights: LightField
 var audio: AudioDirector
+var _fps_label: Label
 
 
 func _ready() -> void:
-	for a in OS.get_cmdline_user_args():
+	var raw := OS.get_cmdline_user_args()
+	# Version web : les mêmes options passent par l'adresse (?autopilot&path=0110).
+	if OS.has_feature("web"):
+		var query := str(JavaScriptBridge.eval("window.location.search", true)).trim_prefix("?")
+		if query != "":
+			raw = PackedStringArray(query.split("&"))
+	for a in raw:
 		var kv: PackedStringArray = a.trim_prefix("--").split("=", true, 1)
 		_args[kv[0]] = kv[1] if kv.size() > 1 else "true"
 	var seed := int(_args.get("seed", "1"))
@@ -113,6 +122,14 @@ func _ready() -> void:
 	_post_material = $Post/Screen.material
 	_lights = LightField.new()
 	reflection.source = camera
+	# Navigateur : reflet plus petit, Safari sur iPhone est moins rapide que l'app.
+	if OS.has_feature("web"):
+		reflection.scale = 0.35
+	if _args.has("fps"):
+		_fps_label = Label.new()
+		_fps_label.position = Vector2(8, 452)
+		_fps_label.add_theme_font_size_override("font_size", 10)
+		hud.add_child(_fps_label)
 	audio = AudioDirector.new()
 	add_child(audio)
 	input.double_tapped.connect(func() -> void: hud.popup(audio.next_station(), Hud.PINK, 12, 250.0))
@@ -248,6 +265,8 @@ func _process(delta: float) -> void:
 	_update_dawn()
 	_update_weather(delta)
 	_update_lighting(delta)
+	if _fps_label:
+		_fps_label.text = "%d i/s" % Engine.get_frames_per_second()
 	audio.update(car.speed, input.throttle if not _args.has("autopilot") else 1.0, _rain if builder.theme_at(car.s).get("rain", 1.0) > 0.0 else 0.0,
 			builder.in_tunnel(car.s), delta)
 	_update_fork_prompt()
