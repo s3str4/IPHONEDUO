@@ -153,6 +153,26 @@ func _test_chunks_are_valid() -> void:
 		var s0 := i * RoadBuilder.CHUNK_LENGTH
 		found += sb._every(RoadBuilder.BILLBOARD_SPACING, 330.0, s0, s0 + RoadBuilder.CHUNK_LENGTH).size()
 	_check(found == 3, "décors : un panneau tous les 900 m, ni oublié ni doublé", "%d sur 3 km" % found)
+	# Construction par étapes (version web) = construction d'un bloc.
+	var tb2 := Track.new(1)
+	var whole := RoadBuilder.new(tb2, 1)
+	whole.stations = RunConfig.stations()
+	var tb3 := Track.new(1)
+	var sliced := RoadBuilder.new(tb3, 1)
+	sliced.stations = RunConfig.stations()
+	var same := true
+	for i in [3, int(RunConfig.station_s(0) / RoadBuilder.CHUNK_LENGTH)]:
+		var one := whole.build_chunk(i)
+		var job := sliced.begin_chunk(i)
+		var steps := 1
+		while not sliced.step_chunk(job):
+			steps += 1
+		var parts: MeshInstance3D = job["result"]
+		same = same and steps > 8 and _vertex_count(one) == _vertex_count(parts) \
+				and one.get_child_count() == parts.get_child_count()
+		one.free()
+		parts.free()
+	_check(same, "construction par étapes identique à la construction d'un bloc")
 	_check(sb.lamp_light(st - RoadBuilder.STATION_SITE_BACK, 4.0) > 0.6, "station : la route est éclairée devant la station")
 	# Les lampadaires éclairent la route, pas partout.
 	var lit := 0
@@ -609,3 +629,11 @@ func _test_audio_and_double_tap() -> void:
 	_check(taps[0] == 1, "pouce : lâcher après avoir roulé ne compte pas", str(taps[0]))
 	input.queue_free()
 	await process_frame
+
+
+func _vertex_count(mi: MeshInstance3D) -> int:
+	var n := 0
+	for m in [mi] + mi.get_children().filter(func(c: Node) -> bool: return c is MeshInstance3D):
+		for s in m.mesh.get_surface_count():
+			n += m.mesh.surface_get_arrays(s)[Mesh.ARRAY_VERTEX].size()
+	return n

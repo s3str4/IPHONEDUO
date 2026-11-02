@@ -42,6 +42,12 @@ var _radio_hide_at := 0.0
 var _fork_left: Label
 var _fork_right: Label
 var _card: Label
+var _hint: Label
+var _paused := false
+
+## Le bouton pause est touché ; une touche pendant la pause demande la reprise.
+signal pause_pressed
+signal resume_requested
 
 
 ## Chiffres et titres (Audiowide).
@@ -68,6 +74,8 @@ static func logo_font() -> FontFile:
 
 func _ready() -> void:
 	layer = 2
+	# L'interface continue de vivre pendant la pause (c'est elle qui la lève).
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -137,6 +145,23 @@ func _ready() -> void:
 	# Titre de région (« LA FORÊT ») au centre, qui apparaît puis s'efface.
 	_card = _label(_play, "", arcade_font(), 18, WHITE, Vector2(0, 150), HORIZONTAL_ALIGNMENT_CENTER, true, false, 4)
 	_card.modulate.a = 0.0
+
+	# Conseils de la première partie, en bas de l'écran.
+	_hint = _label(_play, "", text_font(true), 13, WHITE, Vector2(0, 292), HORIZONTAL_ALIGNMENT_CENTER, true)
+	_hint.modulate.a = 0.0
+
+	# Bouton pause, discret, sous le score.
+	var pause := Button.new()
+	pause.text = "II"
+	pause.flat = true
+	pause.focus_mode = Control.FOCUS_NONE
+	pause.position = Vector2(4, 34)
+	pause.size = Vector2(30, 26)
+	pause.add_theme_font_override("font", arcade_font())
+	pause.add_theme_font_size_override("font_size", 11)
+	pause.add_theme_color_override("font_color", DIM)
+	pause.pressed.connect(func() -> void: pause_pressed.emit())
+	_play.add_child(pause)
 
 	_popups = Control.new()
 	_popups.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -274,6 +299,30 @@ func show_overlay(title: String, body: String, hint: String, logo := false) -> v
 		_overlay_body.position.y = _panel.position.y + 48.0
 	_overlay_hint.text = hint
 	_blink = 0.0
+
+
+## Conseil affiché quelques secondes (première partie).
+func hint(text: String) -> void:
+	_hint.text = text
+	var tw := create_tween()
+	tw.tween_property(_hint, "modulate:a", 1.0, 0.3)
+	tw.tween_interval(3.2)
+	tw.tween_property(_hint, "modulate:a", 0.0, 0.6)
+
+
+func show_pause(on: bool) -> void:
+	_paused = on
+	if on:
+		show_overlay("PAUSE", "", "TOUCHE POUR REPRENDRE")
+		_play.visible = true
+	else:
+		hide_overlay()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _paused and event is InputEventScreenTouch and event.pressed:
+		get_viewport().set_input_as_handled()
+		resume_requested.emit()
 
 
 func hide_overlay() -> void:

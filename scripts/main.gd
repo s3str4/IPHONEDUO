@@ -10,6 +10,7 @@ extends Node3D
 ##                      les bifurcations sautées suivent --path
 ##   --showcase         écran de titre sans interface (captures de la voiture)
 ##   --fps              affiche les images par seconde (essais sur iPhone)
+##   --sliced           construit la route par étapes, comme la version web
 ## Dans la version web, les mêmes options passent par l'adresse : ?fps&seed=3
 ##   --capture=PATH     enregistre une image PNG puis quitte
 ##   --capture_at=SEC   instant de la capture (défaut 6)
@@ -52,6 +53,11 @@ var _build_task_id := -1
 var _pending: MeshInstance3D
 ## Images où un tronçon visible manquait encore (rapporté à la capture).
 var _late_frames := 0
+## Version web sans threads : construction par étapes (voir _build_sliced).
+var _sliced := OS.has_feature("web") and not OS.has_feature("threads")
+var _job := {}
+var _worst_chunk_usec := 0
+const SLICE_BUDGET_USEC := 6000
 var _args := {}
 var _time := 0.0
 var _shake := 0.0
@@ -86,6 +92,9 @@ var _rain := 1.0
 var _lights: LightField
 var audio: AudioDirector
 var _fps_label: Label
+var _tutorial_done := false
+var _tutorial_step := 0
+var _tutorial_fork := false
 
 
 func _ready() -> void:
@@ -98,6 +107,8 @@ func _ready() -> void:
 	for a in raw:
 		var kv: PackedStringArray = a.trim_prefix("--").split("=", true, 1)
 		_args[kv[0]] = kv[1] if kv.size() > 1 else "true"
+	if _args.has("sliced"):
+		_sliced = true
 	var seed := int(_args.get("seed", "1"))
 	if _args.has("path"):
 		_path.clear()
@@ -133,6 +144,8 @@ func _ready() -> void:
 	audio = AudioDirector.new()
 	add_child(audio)
 	input.double_tapped.connect(func() -> void: hud.popup(audio.next_station(), Hud.PINK, 12, 250.0))
+	hud.pause_pressed.connect(_set_paused.bind(true))
+	hud.resume_requested.connect(_set_paused.bind(false))
 	game.near_miss.connect(func(_p: int) -> void: audio.play("whoosh", -4.0, randf_range(0.9, 1.15)))
 	game.station_reached.connect(func(_i: int, _t: float) -> void: audio.play("chime", -6.0))
 
@@ -178,6 +191,34 @@ func _exit_tree() -> void:
 	if _pending != null:
 		_pending.free()
 		_pending = null
+
+
+## Pause : bouton, ou l'app passe en arrière-plan (appel, notification...).
+func _set_paused(on: bool) -> void:
+	if on and game.state != GameRun.State.RUNNING:
+		return
+	get_tree().paused = on
+	hud.show_pause(on)
+
+
+func _notification(what: int) -> void:
+	if what in [NOTIFICATION_APPLICATION_FOCUS_OUT, NOTIFICATION_APPLICATION_PAUSED, NOTIFICATION_WM_WINDOW_FOCUS_OUT] \
+			and not _args.has("autopilot") and not _args.has("capture") and is_inside_tree():
+		_set_paused(true)
+
+
+## Conseils de la toute première partie.
+func _update_tutorial() -> void:
+	if _tutorial_done or game.state != GameRun.State.RUNNING or _args.has("autopilot"):
+		return
+	var steps := [[1.5, "GLISSE LE POUCE POUR TOURNER"], [7.0, "LÈVE LE POUCE POUR FREINER"],
+			[13.0, "DOUBLE TAP : CHANGER DE RADIO"], [20.0, "CHAQUE STATION RAJOUTE DU TEMPS"]]
+	while _tutorial_step < steps.size() and game.elapsed >= steps[_tutorial_step][0]:
+		hud.hint(steps[_tutorial_step][1])
+		_tutorial_step += 1
+	if not _tutorial_fork and car.s > RouteMap.fork_s(0) - 900.0:
+		_tutorial_fork = true
+		hud.hint("AU TERRE-PLEIN, CHOISIS TON CÔTÉ")
 
 
 func _first_lamp_after(s: float) -> float:
@@ -231,6 +272,7 @@ func _physics_process(delta: float) -> void:
 		_shake = 0.5 if car.hit_divider else 0.35
 		game.on_crash(car.s)
 		audio.play("thud" if car.hit_divider else "crash", 0.0 if car.hit_divider else -6.0)
+		Input.vibrate_handheld(150 if car.hit_divider else 60)
 	var th := builder.theme_at(car.s)
 	traffic.density = RunConfig.TRAFFIC_DENSITY[game.segment()] * th.get("traffic", 1.0)
 	traffic.truck_ratio = th.get("trucks", 0.2)
@@ -239,6 +281,7 @@ func _physics_process(delta: float) -> void:
 			_shake = 0.5
 			game.on_crash(car.s)
 			audio.play("crash", -2.0)
+			Input.vibrate_handheld(90)
 		else:
 			game.on_near_miss()
 	_update_events()
@@ -257,7 +300,9 @@ func _physics_process(delta: float) -> void:
 
 func _process(delta: float) -> void:
 	_time += delta
+	var t_chunks := Time.get_ticks_usec()
 	_update_chunks()
+	_worst_chunk_usec = maxi(_worst_chunk_usec, Time.get_ticks_usec() - t_chunks)
 	_place_car_and_camera(delta)
 	traffic_view.sync(traffic, track)
 	car_view.set_lighting(builder.lamp_light(car.s, car.x), input.throttle == 0.0 and not _args.has("autopilot"), delta)
@@ -265,6 +310,7 @@ func _process(delta: float) -> void:
 	_update_dawn()
 	_update_weather(delta)
 	_update_lighting(delta)
+	_update_tutorial()
 	if _fps_label:
 		_fps_label.text = "%d i/s" % Engine.get_frames_per_second()
 	audio.update(car.speed, input.throttle if not _args.has("autopilot") else 1.0, _rain if builder.theme_at(car.s).get("rain", 1.0) > 0.0 else 0.0,
@@ -281,7 +327,8 @@ func _process(delta: float) -> void:
 			_late_frames += 1
 			break
 	if _args.has("capture") and _time >= float(_args.get("capture_at", "6")):
-		print("tronçons en retard : %d images" % _late_frames)
+		print("tronçons en retard : %d images ; pire construction dans une image : %.1f ms" % [
+				_late_frames, _worst_chunk_usec / 1000.0])
 		get_viewport().get_texture().get_image().save_png(_args["capture"])
 		get_tree().quit()
 
@@ -417,6 +464,7 @@ func _load_save() -> void:
 		return
 	_best = int(cfg.get_value("scores", "best", 0))
 	_runs = int(cfg.get_value("progress", "runs", 0))
+	_tutorial_done = _runs > 0
 	for e in cfg.get_value("progress", "endings", []):
 		_endings_seen[int(e)] = true
 
@@ -459,13 +507,38 @@ func _update_chunks(blocking := false) -> void:
 			_worker_builder.choices = game.choices.duplicate()
 			_worker_builder.track.choices.assign(game.choices)
 			_add_chunk(i, _worker_builder.build_chunk(i))
-	if not blocking and missing != -1 and _building == -1:
+	if not blocking and _sliced:
+		_build_sliced(missing)
+	elif not blocking and missing != -1 and _building == -1:
 		_building = missing
 		_build_task_id = WorkerThreadPool.add_task(_build_in_background.bind(missing, game.choices.duplicate()))
 	for i in _chunks.keys():
 		if not wanted.has(i):
 			_chunks[i].queue_free()
 			_chunks.erase(i)
+
+
+## Sans fil d'exécution (version web) : le tronçon se construit par étapes,
+## dans un budget de temps à chaque image, pour ne jamais saccader.
+func _build_sliced(missing: int) -> void:
+	var t0 := Time.get_ticks_usec()
+	while Time.get_ticks_usec() - t0 < SLICE_BUDGET_USEC:
+		if _job.is_empty():
+			if missing == -1:
+				return
+			_worker_builder.choices = game.choices.duplicate()
+			_worker_builder.track.choices.assign(game.choices)
+			_job = _worker_builder.begin_chunk(missing)
+			missing = -1
+		if _worker_builder.step_chunk(_job):
+			var index: int = _job["index"]
+			var mi: MeshInstance3D = _job["result"]
+			_job = {}
+			_worker_builder.track.trim((index - 2) * RoadBuilder.CHUNK_LENGTH)
+			if _chunks.has(index) or absf(index * RoadBuilder.CHUNK_LENGTH - car.s) > 800.0:
+				mi.free()
+			else:
+				_add_chunk(index, mi)
 
 
 func _build_in_background(index: int, choices: Array) -> void:

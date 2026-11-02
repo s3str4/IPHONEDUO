@@ -15,6 +15,8 @@ const LAMP_SPACING := 48.0
 ## Tunnels : longueur et écart (m) dans les ambiances qui en ont.
 const TUNNEL_PERIOD := 760.0
 const TUNNEL_OFFSET := 260.0
+## Construction par étapes : le terrain d'un tronçon en autant de tranches.
+const GROUND_SLICES := 8
 const LAMP_SIGMA := 9.0          # étalement de la flaque de lumière (m)
 const LAMP_POOL_X := 5.0         # centre de la flaque, côté lampadaire
 const LAMP_POLE_X := 9.2
@@ -66,6 +68,8 @@ var _lamp_cache_from := 0.0
 var _lamp_cache_to := 0.0
 ## Ambiance du tronçon en construction.
 var _theme: Dictionary
+var _memo_height := {}
+var _memo_light := {}
 ## Terrain et cônes de lumière du tronçon en construction.
 var _ground: SurfaceTool
 var _cones: SurfaceTool
@@ -308,6 +312,17 @@ func light_sources(s0: float, s1: float) -> Array:
 # --- Construction ------------------------------------------------------------
 
 func build_chunk(index: int) -> MeshInstance3D:
+	var job := begin_chunk(index)
+	while not step_chunk(job):
+		pass
+	return job["result"]
+
+
+## Construction en plusieurs étapes, pour l'étaler sur plusieurs images quand
+## aucun fil d'exécution n'est disponible (version web) : begin_chunk, puis
+## step_chunk jusqu'à ce qu'il renvoie vrai ; le tronçon est dans job.result.
+## Un seul tronçon à la fois par constructeur (l'état courant est partagé).
+func begin_chunk(index: int) -> Dictionary:
 	var s0 := float(index) * CHUNK_LENGTH
 	var s1 := s0 + CHUNK_LENGTH
 	track.ensure(s1 + LAMP_SPACING)
@@ -315,19 +330,49 @@ func build_chunk(index: int) -> MeshInstance3D:
 	_lamp_cache = lamps_between(s0 - 3.0 * LAMP_SIGMA - 1.0, s1 + 3.0 * LAMP_SIGMA + 1.0)
 	_lamp_cache_from = s0 - 1.0
 	_lamp_cache_to = s1 + 1.0
-	var road := _new_tool()
-	var env := _new_tool()
-	var glow := _new_tool()
-	var water := _new_tool()
 	_halo = _new_tool()
 	_ground = _new_tool()
 	_cones = _new_tool()
-	_build_road(road, s0, s1)
-	_build_shoulders_and_ground(env, water, s0, s1)
-	_build_rails(env, s0, s1)
-	_build_lamps(env, glow, s0, s1)
-	_build_trees(env, index, s0, s1)
-	var labels := []
+	_memo_height.clear()
+	_memo_light.clear()
+	return {"index": index, "s0": s0, "s1": s1, "phase": 0, "labels": [],
+		"road": _new_tool(), "env": _new_tool(), "glow": _new_tool(), "water": _new_tool()}
+
+
+func step_chunk(job: Dictionary) -> bool:
+	var s0: float = job["s0"]
+	var s1: float = job["s1"]
+	var slice := CHUNK_LENGTH / GROUND_SLICES
+	var env: SurfaceTool = job["env"]
+	var glow: SurfaceTool = job["glow"]
+	var labels: Array = job["labels"]
+	var phase: int = job["phase"]
+	if phase == 0:
+		_build_road(job["road"], s0, s1)
+	elif phase <= GROUND_SLICES:
+		# Le terrain, l'étape la plus lourde, en tranches de 12,5 m.
+		var a := s0 + (phase - 1) * slice
+		_build_shoulders_and_ground(env, job["water"], a, a + slice)
+	else:
+		match phase - GROUND_SLICES:
+			1:
+				_build_rails(env, s0, s1)
+				_build_lamps(env, glow, s0, s1)
+			2:
+				_build_trees(env, job["index"], s0, s1)
+			3:
+				_build_landmarks(env, glow, labels, s0, s1)
+			4:
+				labels.append_array(Scenery.build(self, env, glow, job["index"], s0, s1))
+			_:
+				job["result"] = _finish_chunk(job)
+				return true
+	job["phase"] += 1
+	return false
+
+
+## Stations, portiques, panneaux, pylônes, ponts, décors des événements.
+func _build_landmarks(env: SurfaceTool, glow: SurfaceTool, labels: Array, s0: float, s1: float) -> void:
 	for st in stations:
 		if st - STATION_SITE_BACK - STATION_SITE_HALF < s1 and st + 10.0 >= s0:
 			_build_station(env, glow, st, s0, s1)
@@ -354,24 +399,25 @@ func build_chunk(index: int) -> MeshInstance3D:
 		for br in _every(BRIDGE_SPACING, 620.0, s0, s1):
 			if not _near_checkpoint(br, 200.0) and not in_tunnel(br):
 				_build_bridge(env, glow, br)
-	labels.append_array(Scenery.build(self, env, glow, index, s0, s1))
 
+
+func _finish_chunk(job: Dictionary) -> MeshInstance3D:
 	# Terrain : sommets partagés et normales lissées.
 	_ground.index()
 	_ground.generate_normals()
 	var mats := _materials_for(_theme)
 	var mi := MeshInstance3D.new()
-	mi.mesh = _assemble([[env, mats[1]], [_ground, mats[2]], [glow, glow_material],
+	mi.mesh = _assemble([[job["env"], mats[1]], [_ground, mats[2]], [job["glow"], glow_material],
 			[_cones, cone_material], [_halo, Halo.material()]])
-	mi.name = "Chunk%d" % index
+	mi.name = "Chunk%d" % job["index"]
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# Route et eau à part : la caméra de réflexion ne doit pas les voir.
 	var wet := MeshInstance3D.new()
-	wet.mesh = _assemble([[road, mats[0]], [water, water_material]])
+	wet.mesh = _assemble([[job["road"], mats[0]], [job["water"], water_material]])
 	wet.layers = 1 << (Reflection.WET_LAYER - 1)
 	wet.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.add_child(wet)
-	for l in labels:
+	for l in job["labels"]:
 		if l != null:
 			mi.add_child(l)
 	return mi
@@ -649,7 +695,7 @@ func _build_road(st: SurfaceTool, s0: float, s1: float) -> void:
 			var xa: float = ROAD_COLUMNS[c]
 			var xb: float = ROAD_COLUMNS[c + 1]
 			var pts := [_road_pos(sa, xa), _road_pos(sb, xa), _road_pos(sb, xb), _road_pos(sa, xb)]
-			var lights := [lamp_light(sa, xa), lamp_light(sb, xa), lamp_light(sb, xb), lamp_light(sa, xb)]
+			var lights := [_light_memo(sa, xa), _light_memo(sb, xa), _light_memo(sb, xb), _light_memo(sa, xb)]
 			var uvs := [
 				Vector2((xa + 6.0) / 12.0, sa / 12.0), Vector2((xa + 6.0) / 12.0, sb / 12.0),
 				Vector2((xb + 6.0) / 12.0, sb / 12.0), Vector2((xb + 6.0) / 12.0, sa / 12.0)]
@@ -686,15 +732,31 @@ func _build_shoulders_and_ground(st: SurfaceTool, water: SurfaceTool, s0: float,
 				_strip(st, sa, sb, xa, xb, 0.0, 0.0, ca, cb, side, true)
 
 
+## Hauteur et lumière d'un point de la grille, calculées une seule fois par
+## tronçon (chaque point est partagé par quatre carreaux).
+func _height_memo(s: float, x: float) -> float:
+	var key := Vector2(s, x)
+	if not _memo_height.has(key):
+		_memo_height[key] = ground_height(s, x)
+	return _memo_height[key]
+
+
+func _light_memo(s: float, x: float) -> float:
+	var key := Vector2(s, x)
+	if not _memo_light.has(key):
+		_memo_light[key] = lamp_light(s, x)
+	return _memo_light[key]
+
+
 ## Bande de terrain entre xa et xb (xa plus près de la route), sens selon le côté.
 func _strip(st: SurfaceTool, sa: float, sb: float, xa: float, xb: float, ha: float, hb: float,
 		ca: Color, cb: Color, side: float, use_ground := false) -> void:
-	var haa := ground_height(sa, xa) if use_ground else ha
-	var hab := ground_height(sb, xa) if use_ground else ha
-	var hba := ground_height(sa, xb) if use_ground else hb
-	var hbb := ground_height(sb, xb) if use_ground else hb
+	var haa := _height_memo(sa, xa) if use_ground else ha
+	var hab := _height_memo(sb, xa) if use_ground else ha
+	var hba := _height_memo(sa, xb) if use_ground else hb
+	var hbb := _height_memo(sb, xb) if use_ground else hb
 	var p := [_road_pos(sa, xa, haa), _road_pos(sb, xa, hab), _road_pos(sb, xb, hbb), _road_pos(sa, xb, hba)]
-	var l := [lamp_light(sa, xa), lamp_light(sb, xa), lamp_light(sb, xb), lamp_light(sa, xb)]
+	var l := [_light_memo(sa, xa), _light_memo(sb, xa), _light_memo(sb, xb), _light_memo(sa, xb)]
 	var c := [ca, ca, cb, cb]
 	if use_ground:
 		# Aire de la station : goudron clair au lieu de l'herbe.
