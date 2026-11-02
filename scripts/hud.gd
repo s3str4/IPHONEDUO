@@ -59,6 +59,8 @@ var _pips: Array[ColorRect] = []
 var _ram_bar: ColorRect
 var _ram_label: Label
 var _pursuit_time := 0.0
+var _ghost_label: Label
+const GHOST_CYAN := Color(0.45, 0.9, 1.0)
 const SIREN_RED := Color(1.0, 0.25, 0.22)
 const SIREN_BLUE := Color(0.35, 0.55, 1.0)
 var _bars: Array[ColorRect] = []
@@ -136,6 +138,7 @@ func _ready() -> void:
 	_time = _label(_play, "88", arcade_font(), 26, AMBER, Vector2(0, 14), HORIZONTAL_ALIGNMENT_CENTER, true)
 	_label(_play, "SCORE", text_font(true), 10, DIM, Vector2(8, 4), HORIZONTAL_ALIGNMENT_LEFT)
 	_score = _label(_play, "0", arcade_font(), 10, WHITE, Vector2(8, 17), HORIZONTAL_ALIGNMENT_LEFT)
+	_ghost_label = _label(_play, "", text_font(true), 9, GHOST_CYAN, Vector2(8, 32), HORIZONTAL_ALIGNMENT_LEFT)
 	_stage = _label(_play, "ÉTAPE 1/5", text_font(true), 10, DIM, Vector2(-8, 4), HORIZONTAL_ALIGNMENT_RIGHT)
 	_mult = _label(_play, "", arcade_font(), 10, AMBER, Vector2(-8, 17), HORIZONTAL_ALIGNMENT_RIGHT)
 
@@ -360,6 +363,12 @@ func title_card(text: String) -> void:
 	tw.tween_property(_card, "modulate:a", 1.0, 0.4)
 	tw.tween_interval(2.2)
 	tw.tween_property(_card, "modulate:a", 0.0, 0.8)
+
+
+## Écart avec le fantôme du record (vide : rien) ; cyan devant, rouge derrière.
+func set_ghost(text: String, ahead: bool) -> void:
+	_ghost_label.text = text
+	_ghost_label.label_settings.font_color = GHOST_CYAN if ahead else RED
 
 
 ## Poursuite : gap (m, positif derrière vous), touches reçues, et pendant

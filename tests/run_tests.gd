@@ -30,6 +30,7 @@ func _initialize() -> void:
 	await _test_thumb_input()
 	_test_ending_scenes()
 	_test_police()
+	_test_ghost()
 	await _test_english()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -1037,3 +1038,23 @@ func _test_police() -> void:
 						overlaps += 1
 	_check(frames > 60 * 30 and overlaps < frames / 200, "police : ne traverse pas le trafic",
 			"%d images en poursuite, %d chevauchements" % [frames, overlaps])
+
+
+func _test_ghost() -> void:
+	var g := Ghost.new(7)
+	# Une voiture à 50 m/s pendant 10 s, enregistrée à 60 images/s.
+	for i in 601:
+		g.record(i / 60.0, i / 60.0 * 50.0, 1.0)
+	_check(absf(g.duration() - 10.0) < 0.11 and g.s_track.size() == 101, "fantôme : dix points par seconde", str(g.s_track.size()))
+	_check(absf(g.at(4.25).x - 212.5) < 0.5 and absf(g.time_at(300.0) - 6.0) < 0.02 and g.time_at(900.0) == INF,
+			"fantôme : position et instant de passage", "%s %s" % [g.at(4.25), g.time_at(300.0)])
+	g.choices = [0, 1]
+	_check(g.same_route([0]) and g.same_route([0, 1, 1]) and not g.same_route([1]),
+			"fantôme : reconnaît une autre route")
+	var path := "user://test_ghost.save"
+	g.score = 1234
+	g.write(path)
+	var back := Ghost.load_for(7, path)
+	_check(back != null and back.score == 1234 and back.choices == [0, 1] and back.s_track == g.s_track
+			and Ghost.load_for(8, path) == null, "fantôme : sauvegardé et relu, pour sa route seulement")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))

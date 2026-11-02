@@ -186,6 +186,8 @@ const EN := {
 
 	# --- Police -------------------------------------------------------------------------
 	"POURSUITE": "PURSUIT",
+	"LE FANTÔME A PRIS L'AUTRE ROUTE": "THE GHOST TOOK THE OTHER ROAD",
+	"FANTÔME DU RECORD : %s": "RECORD GHOST: %s",
 	"POURSUITE !": "PURSUIT!",
 	"ELLE CHARGE": "RAM INCOMING",
 	"%d M DERRIÈRE": "%d M BEHIND",

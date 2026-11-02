@@ -157,6 +157,12 @@ func open_settings() -> void:
 		row.add_child(b)
 	_content.add_child(row)
 	_text("Sobre : sans reflet de la route, pour les iPhone plus anciens.", Hud.DIM)
+	var gb := _button(Lang.t("FANTÔME DU RECORD : %s") % (Lang.t("OUI") if save.ghost_on else Lang.t("NON")), Vector2.ZERO, Vector2(230, 26))
+	gb.pressed.connect(func() -> void:
+		save.ghost_on = not save.ghost_on
+		settings_changed.emit()
+		open_settings())
+	_content.add_child(gb)
 	_heading("LANGUE")
 	var langs := HBoxContainer.new()
 	langs.add_theme_constant_override("separation", 6)

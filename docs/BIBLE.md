@@ -315,6 +315,12 @@ deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
     Points ×1,5 pendant la poursuite, gyrophares qui éclairent la route
     mouillée, pin-pon deux tons avec effet Doppler. Équilibrage : le pilote
     auto atteint l'aube 27 fois sur 30 (2 s rendues par station).
+  - **Fantôme du record** : la meilleure partie sur cette route (normale, ou
+    nuit du jour) rejouée en hologramme cyan, écart en direct sous le score
+    (cyan devant, rouge derrière). Il disparaît s'il a pris une autre route.
+    Réglage pour le masquer.
+  - **Netteté iPhone** : interface à 2x la densité, 3D à 720/860/1000 lignes
+    selon la qualité.
   - Version web jouable sur iPhone (GitHub Pages), sans saccade : la route se
     construit par étapes quand le navigateur n'a pas de threads. Pause,
     premiers pas guidés, vibrations aux chocs (app).

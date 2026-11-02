@@ -97,6 +97,13 @@ var _radio_queue := []
 var _low_time_said := false
 var _fork_said := false
 var _prev_s := 0.0
+## Fantôme du record (voir Ghost) : celui qu'on affronte et celui qu'on enregistre.
+var ghost: Ghost
+var ghost_view: GhostView
+var _ghost_rec: Ghost
+var _ghost_lost := false
+var _run_time := 0.0
+var _seed := 1
 ## Brouillard et météo courants, qui glissent vers ceux de l'ambiance.
 var _fog_scale := 1.0
 var _fog_tint := NIGHT_FOG
@@ -161,6 +168,7 @@ func _ready() -> void:
 	if _args.has("storm_at"):
 		_storm_wait = float(_args["storm_at"])
 	var seed := daily_seed() if daily_mode else int(_args.get("seed", "1"))
+	_seed = seed
 	if _args.has("path"):
 		_path.clear()
 		for c in str(_args["path"]):
@@ -184,6 +192,11 @@ func _ready() -> void:
 	police = Police.new(seed)
 	police_view = PoliceView.new()
 	add_child(police_view)
+	ghost_view = GhostView.new()
+	add_child(ghost_view)
+	_ghost_rec = Ghost.new(seed)
+	if save.ghost_on and (not _args.has("autopilot") or _args.has("ghost")):
+		ghost = Ghost.load_for(seed)
 	_sky_material = environment.sky.sky_material
 	_ambient_base = ProjectSettings.get_setting("shader_globals/sky_ambient")["value"]
 	_post_material = $Post/Screen.material
@@ -482,6 +495,9 @@ func _physics_process(delta: float) -> void:
 			police.apply(e, game)
 			_on_police(e)
 	_update_events()
+	if game.state == GameRun.State.RUNNING:
+		_run_time += delta
+		_ghost_rec.record(_run_time, car.s, car.x)
 	game.update(car.s, car.x, absf(car.slip) > 0.12 and car.speed > 45.0, delta)
 	_prev_s = car.s
 
@@ -507,6 +523,7 @@ func _process(delta: float) -> void:
 	_place_car_and_camera(delta)
 	traffic_view.sync(traffic, track)
 	police_view.sync(police, car, track, builder.water_side, delta)
+	_update_ghost()
 	var ram_side := 99
 	if police.state == Police.State.RAM:
 		var dx := police.ram_x - car.x
@@ -815,6 +832,7 @@ func _on_arrived(bonus: int) -> void:
 		save.events_seen[f] = true
 	var earned := _earn_credits()
 	_write_save()
+	_save_ghost()
 	_begin_ending_scene()
 	police.state = Police.State.DONE
 	game.pursuit = false
@@ -828,6 +846,42 @@ func _on_arrived(bonus: int) -> void:
 	_overlay_at = _time + ENDING_SCENE_TIME
 
 
+## Fantôme : affiché tant qu'il suit la même route, écart en secondes à l'écran.
+func _update_ghost() -> void:
+	if ghost == null or _ghost_lost or game.state == GameRun.State.WAITING or _anchor < INF:
+		ghost_view.visible = false
+		hud.set_ghost("", false)
+		return
+	if not ghost.same_route(game.choices):
+		_ghost_lost = true
+		hud.popup("LE FANTÔME A PRIS L'AUTRE ROUTE", Hud.LOU_BLUE, 8, 250.0)
+		return
+	var p := ghost.at(_run_time)
+	ghost_view.show_at(track, p.x, p.y, car.s)
+	var t_ghost := ghost.time_at(car.s)
+	if t_ghost == INF:
+		hud.set_ghost("", false)
+		return
+	var gap := _run_time - t_ghost
+	if _args.has("ghost_log") and Engine.get_process_frames() % 30 == 0:
+		print("fantôme t %.2f joueur s %.0f | fantôme s %.0f x %.1f | écart %.2f" % [_run_time, car.s, p.x, p.y, gap])
+	var txt := "%+.1f S" % gap
+	if Lang.code == "fr":
+		txt = txt.replace(".", ",")
+	hud.set_ghost(Lang.t("RECORD %s") % txt, gap <= 0.0)
+
+
+## Fin de partie : si elle bat le fantôme (au score), elle devient le fantôme.
+func _save_ghost() -> void:
+	if _args.has("autopilot") and not _args.has("record_ghost"):
+		return
+	_ghost_rec.choices = game.choices.duplicate()
+	_ghost_rec.score = int(game.score)
+	var best := Ghost.load_for(_seed)
+	if best == null or _ghost_rec.score > best.score:
+		_ghost_rec.write()
+
+
 func _on_time_up() -> void:
 	_end_time = _time
 	var record := _save_best(int(game.score))
@@ -835,6 +889,7 @@ func _on_time_up() -> void:
 		save.events_seen[f] = true
 	var earned := _earn_credits()
 	_write_save()
+	_save_ghost()
 	hud.show_overlay("LA NUIT\nGAGNE",
 			Lang.t("\nÉTAPE %d SUR %d\n%.1f KM\n\nSCORE %s\n\n%s\n+%s CRÉDITS") % [
 				game.segment() + 1, RunConfig.SEGMENT_COUNT, car.s / 1000.0, Hud._group(int(game.score)),

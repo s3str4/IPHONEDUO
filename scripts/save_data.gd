@@ -38,6 +38,8 @@ var language := ""
 ## Poursuites : semées, et arrestations.
 var pursuits_escaped := 0
 var busted := 0
+## Fantôme du record affiché.
+var ghost_on := true
 
 
 static func load_or_new(p: String = PATH) -> SaveData:
@@ -74,6 +76,7 @@ static func load_or_new(p: String = PATH) -> SaveData:
 	s.language = str(cfg.get_value("settings", "language", ""))
 	s.pursuits_escaped = int(cfg.get_value("progress", "pursuits_escaped", 0))
 	s.busted = int(cfg.get_value("progress", "busted", 0))
+	s.ghost_on = bool(cfg.get_value("settings", "ghost", true))
 	return s
 
 
@@ -99,6 +102,7 @@ func write() -> void:
 	cfg.set_value("settings", "language", language)
 	cfg.set_value("progress", "pursuits_escaped", pursuits_escaped)
 	cfg.set_value("progress", "busted", busted)
+	cfg.set_value("settings", "ghost", ghost_on)
 	cfg.save(path)
 
 
