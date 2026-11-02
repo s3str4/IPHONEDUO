@@ -29,6 +29,7 @@ func _initialize() -> void:
 	await _test_car_feel()
 	await _test_thumb_input()
 	_test_ending_scenes()
+	await _test_english()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
 
@@ -802,3 +803,118 @@ func _test_ending_scenes() -> void:
 			detail += "%d " % e
 		mi.free()
 	_check(ok, "fin : un décor pour chacune des cinq destinations", detail)
+
+
+## Textes qui ne s'affichent jamais (bus audio, noms de nœuds).
+const NOT_SHOWN := ["Bruitages", "Musique", "Master", "EndingScene", "Chunk%d", "II", "La Mer"]
+## Lettres et signes qui trahissent du français resté à l'écran.
+const FRENCH_MARKS := "éèêëàâçôûùîïœÉÈÊÀÂÇÔÛÎ«»"
+
+
+func _test_english() -> void:
+	# 1. Chaque texte du code a sa version anglaise, avec les mêmes gabarits.
+	var rx := RegEx.create_from_string("\"((?:[^\"\\\\]|\\\\.)*)\"")
+	var ident := RegEx.create_from_string("^[a-z0-9_#./:%-]*$")
+	var letters := RegEx.create_from_string("[A-Za-zÀ-ÿ]{2,}")
+	var holes := RegEx.create_from_string("%[-0-9.]*[dsf]")
+	var missing := []
+	var wrong := []
+	var scanned := 0
+	var dir := DirAccess.open("res://scripts")
+	for f in dir.get_files():
+		if not f.ends_with(".gd") or f == "lang.gd":
+			continue
+		for line in FileAccess.get_file_as_string("res://scripts/" + f).split("\n"):
+			var code := line.get_slice("##", 0)
+			if code.strip_edges().begins_with("#") or code.contains("print(") or code.contains("push_"):
+				continue
+			for m in rx.search_all(code):
+				var v := m.get_string(1).c_unescape()
+				if ident.search(v) != null or v.begins_with("res://") or letters.search(v) == null or v in NOT_SHOWN:
+					continue
+				scanned += 1
+				if not Lang.EN.has(v):
+					missing.append("%s: %s" % [f, v.left(40)])
+				else:
+					var a := holes.search_all(v).map(func(h: RegExMatch) -> String: return h.get_string())
+					var b := holes.search_all(Lang.EN[v]).map(func(h: RegExMatch) -> String: return h.get_string())
+					if a != b:
+						wrong.append(v.left(40))
+	# Le banc doit voir tous les textes (192 au moment où il est écrit), sinon il ne vérifie rien.
+	_check(missing.is_empty() and scanned >= 180, "anglais : chaque texte du jeu est traduit", "%d vus, manquants : %s" % [scanned, str(missing)])
+	_check(wrong.is_empty(), "anglais : mêmes gabarits (%d, %s) que le français", str(wrong))
+	var french := []
+	for v in Lang.EN.values():
+		for ch in FRENCH_MARKS:
+			if v.contains(ch) and v != "FRANÇAIS":
+				french.append(v.left(30))
+				break
+	_check(french.is_empty(), "anglais : aucune traduction ne garde du français", str(french))
+	var bad := ""
+	for v in Lang.EN.values():
+		for ch in v:
+			if ch.unicode_at(0) < 32:
+				continue
+			for font in [Hud.arcade_font(), Hud.text_font(), Hud.text_font(true)]:
+				if not font.has_char(ch.unicode_at(0)) and not bad.contains(ch):
+					bad += ch
+	_check(bad == "", "anglais : tout s'affiche avec nos polices", bad)
+	Lang.code = "fr"
+	_check(Lang.group(1234567) == "1 234 567" and Lang.t("TEMPS") == "TEMPS", "français : nombres et textes intacts")
+
+	# 2. En anglais, aucun écran ne montre de français : interface, fins, menus
+	# ouverts avec une sauvegarde où tout est découvert.
+	Lang.code = "en"
+	_check(Lang.group(1234567) == "1,234,567", "anglais : nombres groupés à l'anglaise")
+	var hud := Hud.new()
+	root.add_child(hud)
+	await process_frame
+	var save := SaveData.load_or_new("user://test_lang.cfg")
+	for e in RouteMap.ENDINGS.size():
+		save.endings[e] = 1000
+	for id in Scenario.LOU:
+		save.messages[id] = true
+	for key in Menus.EVENT_NAMES:
+		save.events_seen[key] = true
+	for key in Garage.OPTIONS:
+		save.owned[key] = true
+	var menus := Menus.new()
+	menus.save = save
+	root.add_child(menus)
+	await process_frame
+	var seen := []
+	hud.radio(Scenario.RADIO["lac"])
+	hud.title_card(RouteMap.THEMES["lac"]["name"])
+	hud.set_values(60.0, 1000.0, 2, 1.5, 200.0, 0.5)
+	for e in RouteMap.ENDINGS.size():
+		hud.show_overlay(RouteMap.ENDINGS[e], Scenario.ending_text(e, {"stoppeuse": true}), "TOUCHE POUR REJOUER")
+		seen.append_array(_texts(hud))
+	seen.append(Scenario.ending_text(4, {"a": 1, "b": 1, "c": 1, "d": 1}))
+	hud.radio(Scenario.LOU["lac"], Scenario.LOU_HEADER)
+	hud._process(30.0)
+	seen.append_array(_texts(hud))
+	for screen in ["open_journal", "open_settings", "open_garage"]:
+		menus.call(screen)
+		seen.append_array(_texts(menus))
+	var leaks := []
+	for txt in seen:
+		for ch in FRENCH_MARKS:
+			if txt.contains(ch) and txt != "FRANÇAIS":
+				leaks.append(txt.left(40))
+				break
+	_check(leaks.is_empty() and seen.size() > 40, "anglais : aucun écran ne montre de français",
+			"%d textes, fuites : %s" % [seen.size(), str(leaks)])
+	hud.queue_free()
+	menus.queue_free()
+	Lang.code = "fr"
+	await process_frame
+
+
+func _texts(node: Node) -> Array:
+	var out := []
+	if node is Label or node is Button:
+		if node.text != "":
+			out.append(node.text)
+	for c in node.get_children():
+		out.append_array(_texts(c))
+	return out

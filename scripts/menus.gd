@@ -10,6 +10,8 @@ signal closed
 signal settings_changed
 signal color_chosen(index: int)
 signal garage_changed
+## La langue a changé : tout l'écran est à reconstruire.
+signal language_changed
 
 const EVENT_NAMES := {
 	"stoppeuse": "L'auto-stoppeuse", "radio_live": "La radio parle de toi",
@@ -77,23 +79,23 @@ func open_journal() -> void:
 	_layout(false)
 	_clear()
 	_title("CARNET DE ROUTE")
-	_heading("FINS  %d / %d" % [save.endings.size(), RouteMap.ENDINGS.size()])
+	_heading(Lang.t("FINS  %d / %d") % [save.endings.size(), RouteMap.ENDINGS.size()])
 	for e in RouteMap.ENDINGS.size():
 		if save.endings.has(e):
-			_text("%s  —  record %s" % [RouteMap.ENDINGS[e], Hud._group(int(save.endings[e]))], Hud.AMBER, true)
-			_text(Scenario.ENDINGS[e][1].get_slice(".", 0) + ".", Hud.DIM)
+			_text(Lang.t("%s  —  record %s") % [Lang.t(RouteMap.ENDINGS[e]), Hud._group(int(save.endings[e]))], Hud.AMBER, true)
+			_text(Lang.t(Scenario.ENDINGS[e][1]).get_slice(".", 0) + ".", Hud.DIM)
 		else:
-			_text("???  —  %s" % ENDING_HINTS[e], Hud.DIM, true)
+			_text("???  —  %s" % Lang.t(ENDING_HINTS[e]), Hud.DIM, true)
 	var total := 0
 	for stage in RouteMap.STAGES:
 		total += stage.size()
-	_heading("MESSAGES DE LOU  %d / %d" % [save.messages.size(), total])
+	_heading(Lang.t("MESSAGES DE LOU  %d / %d") % [save.messages.size(), total])
 	for stage in RouteMap.STAGES:
 		for id in stage:
 			_text(RouteMap.THEMES[id]["name"], Hud.LOU_BLUE if save.messages.has(id) else Hud.DIM, true)
-			_text("« %s »" % Scenario.LOU[id] if save.messages.has(id) else "— pas encore écouté —",
+			_text(Lang.t("« %s »") % Lang.t(Scenario.LOU[id]) if save.messages.has(id) else "— pas encore écouté —",
 					Hud.WHITE if save.messages.has(id) else Hud.DIM)
-	_heading("ÉVÉNEMENTS  %d / %d" % [save.events_seen.size(), EVENT_NAMES.size()])
+	_heading(Lang.t("ÉVÉNEMENTS  %d / %d") % [save.events_seen.size(), EVENT_NAMES.size()])
 	for key in EVENT_NAMES:
 		_text((EVENT_NAMES[key] if save.events_seen.has(key) else "???  —  pas encore vu"),
 				Hud.WHITE if save.events_seen.has(key) else Hud.DIM)
@@ -122,11 +124,11 @@ func open_journal() -> void:
 			open_journal())
 		row.add_child(b)
 	_content.add_child(row)
-	_text(CarView.PAINTS[save.car_color][0] + "  —  chaque fin débloque une teinte", Hud.DIM)
+	_text(Lang.t(CarView.PAINTS[save.car_color][0]) + Lang.t("  —  chaque fin débloque une teinte"), Hud.DIM)
 	_heading("RECORDS")
-	_text("Meilleur score : %s" % Hud._group(save.best), Hud.WHITE)
-	_text("Nuit du jour : %s" % Hud._group(int(save.daily.get(Main.today(), 0))), Hud.WHITE)
-	_text("Parties jouées : %d" % save.runs, Hud.DIM)
+	_text(Lang.t("Meilleur score : %s") % Hud._group(save.best), Hud.WHITE)
+	_text(Lang.t("Nuit du jour : %s") % Hud._group(int(save.daily.get(Main.today(), 0))), Hud.WHITE)
+	_text(Lang.t("Parties jouées : %d") % save.runs, Hud.DIM)
 	_root.visible = true
 
 
@@ -153,6 +155,17 @@ func open_settings() -> void:
 		row.add_child(b)
 	_content.add_child(row)
 	_text("Sobre : sans reflet de la route, pour les iPhone plus anciens.", Hud.DIM)
+	_heading("LANGUE")
+	var langs := HBoxContainer.new()
+	langs.add_theme_constant_override("separation", 6)
+	for entry in [["", "AUTO"], ["fr", "FRANÇAIS"], ["en", "ENGLISH"]]:
+		var lb := _button(entry[1], Vector2.ZERO, Vector2(74, 26))
+		lb.modulate = Hud.AMBER if save.language == entry[0] else Hud.DIM
+		lb.pressed.connect(func() -> void:
+			save.language = entry[0]
+			language_changed.emit())
+		langs.add_child(lb)
+	_content.add_child(langs)
 	_root.visible = true
 
 
@@ -163,15 +176,15 @@ func open_garage() -> void:
 	_layout(true)
 	_clear()
 	_title("GARAGE")
-	_text("CRÉDITS  %s   —   1 crédit tous les 100 points" % Hud._group(save.credits), Hud.AMBER, true)
+	_text(Lang.t("CRÉDITS  %s   —   1 crédit tous les 100 points") % Hud._group(save.credits), Hud.AMBER, true)
 	for key in Garage.UPGRADES:
 		var info: Array = Garage.UPGRADES[key]
 		var level: int = save.upgrades[key]
-		_heading("%s  —  NIVEAU %d/%d" % [info[0], level, Garage.MAX_LEVEL])
+		_heading(Lang.t("%s  —  NIVEAU %d/%d") % [Lang.t(info[0]), level, Garage.MAX_LEVEL])
 		_text(info[1], Hud.DIM)
 		if level < Garage.MAX_LEVEL:
 			var price: int = Garage.PRICES[level]
-			var b := _button("AMÉLIORER — %s" % Hud._group(price), Vector2.ZERO, Vector2(230, 26))
+			var b := _button(Lang.t("AMÉLIORER — %s") % Hud._group(price), Vector2.ZERO, Vector2(230, 26))
 			b.disabled = save.credits < price
 			b.modulate = Hud.WHITE if save.credits >= price else Hud.DIM
 			b.pressed.connect(func() -> void:
@@ -181,11 +194,11 @@ func open_garage() -> void:
 			_content.add_child(b)
 	_heading("OPTIONS")
 	for key in Garage.OPTIONS:
-		var name: String = Garage.OPTIONS[key][0]
+		var name: String = Lang.t(Garage.OPTIONS[key][0])
 		var price: int = Garage.OPTIONS[key][1]
 		var label: String
 		if save.owned.has(key):
-			label = "%s : %s" % [name, "OUI" if _option_on(key) else "NON"]
+			label = Lang.t("%s : %s") % [name, Lang.t("OUI") if _option_on(key) else Lang.t("NON")]
 		else:
 			label = "%s — %s" % [name, Hud._group(price)]
 		var b := _button(label, Vector2.ZERO, Vector2(230, 26))
@@ -248,7 +261,7 @@ func _heading(text: String) -> void:
 
 func _text(text: String, color: Color, bold := false, font: Font = null, size := 11) -> Label:
 	var l := Label.new()
-	l.text = text
+	l.text = Lang.t(text)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(236, 0)
 	var ls := LabelSettings.new()
@@ -277,7 +290,7 @@ func _slider(label: String, value: float, lo: float, hi: float, setter: Callable
 
 func _button(text: String, pos: Vector2, size: Vector2) -> Button:
 	var b := Button.new()
-	b.text = text
+	b.text = Lang.t(text)
 	b.position = pos
 	b.size = size
 	b.custom_minimum_size = size

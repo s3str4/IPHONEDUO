@@ -303,6 +303,11 @@ deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
     entre le lac et le vide, l'observatoire au-dessus d'une mer de nuages,
     la cabine téléphonique sur la plaine blanche. Le texte arrive après
     sept secondes (ou d'une touche).
+  - **Version anglaise** : tout le jeu (radio, messages de Lou, fins,
+    menus, panneaux de la route) en anglais, langue du téléphone par défaut,
+    choix FR/EN dans les réglages. Un banc vérifie que chaque texte du code est
+    traduit avec les mêmes gabarits et qu'aucun écran anglais ne montre de
+    français. Les nombres se groupent à l'anglaise (12,345).
   - Version web jouable sur iPhone (GitHub Pages), sans saccade : la route se
     construit par étapes quand le navigateur n'a pas de threads. Pause,
     premiers pas guidés, vibrations aux chocs (app).

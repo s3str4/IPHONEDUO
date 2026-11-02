@@ -240,7 +240,7 @@ static func _fork_signs(b: RoadBuilder, env: SurfaceTool, glow: SurfaceTool, s: 
 		b._glow_box(glow, b._road_pos(s, x, h) + back, yaw, Vector3(8.2, 1.5, 0.06), col, 0.55)
 		b._box(env, b._road_pos(s, x, h - 0.1), yaw, Vector3(8.4, 1.7, 0.2), Color(0.04, 0.04, 0.05), 0.1)
 		var label := Label3D.new()
-		label.text = ("< " + names[i]) if i == 0 else (names[i] + " >")
+		label.text = ("< " + Lang.t(names[i])) if i == 0 else (Lang.t(names[i]) + " >")
 		label.font = Hud.arcade_font()
 		label.font_size = 32
 		label.pixel_size = 0.013

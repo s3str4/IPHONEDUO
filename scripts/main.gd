@@ -39,6 +39,8 @@ const FORK_PROMPT := 1200.0
 static var quick_restart := false
 ## Nuit du jour : même route et même trafic pour tout le monde ce jour-là.
 static var daily_mode := false
+## Écran à rouvrir après un rechargement (changement de langue).
+static var reopen_menu := ""
 
 
 ## Date du jour, « AAAA-MM-JJ ».
@@ -128,16 +130,29 @@ var _flash_time := -1.0
 var _thunder_in := -1.0
 
 
-func _ready() -> void:
+## La langue doit être choisie avant que l'interface (enfant de Main) ne se
+## construise : _init passe avant tous les _ready.
+func _init() -> void:
+	_args = _parse_args()
+	Lang.apply(str(_args.get("lang", SaveData.load_or_new().language)))
+
+
+## Options de lancement : ligne de commande, ou adresse sur la version web
+## (?autopilot&path=0110&lang=en).
+static func _parse_args() -> Dictionary:
+	var out := {}
 	var raw := OS.get_cmdline_user_args()
-	# Version web : les mêmes options passent par l'adresse (?autopilot&path=0110).
 	if OS.has_feature("web"):
 		var query := str(JavaScriptBridge.eval("window.location.search", true)).trim_prefix("?")
 		if query != "":
 			raw = PackedStringArray(query.split("&"))
 	for a in raw:
 		var kv: PackedStringArray = a.trim_prefix("--").split("=", true, 1)
-		_args[kv[0]] = kv[1] if kv.size() > 1 else "true"
+		out[kv[0]] = kv[1] if kv.size() > 1 else "true"
+	return out
+
+
+func _ready() -> void:
 	if _args.has("sliced"):
 		_sliced = true
 	if _args.has("storm_at"):
@@ -173,6 +188,11 @@ func _ready() -> void:
 	menus.save = save
 	add_child(menus)
 	menus.settings_changed.connect(_apply_settings)
+	menus.language_changed.connect(func() -> void:
+		_write_save()
+		Lang.apply(save.language)
+		reopen_menu = "reglages"
+		get_tree().reload_current_scene())
 	menus.color_chosen.connect(func(i: int) -> void:
 		car_view.set_paint(i)
 		_write_save())
@@ -217,7 +237,7 @@ func _ready() -> void:
 	game.station_reached.connect(func(_i: int, _t: float) -> void: audio.play("chime", -6.0))
 
 	game.station_reached.connect(_on_station)
-	game.near_miss.connect(func(pts: int) -> void: hud.popup("FRÔLÉ +%d" % pts, Hud.WHITE, 8, 210.0))
+	game.near_miss.connect(func(pts: int) -> void: hud.popup(Lang.t("FRÔLÉ +%d") % pts, Hud.WHITE, 8, 210.0))
 	game.chain_broken.connect(func() -> void: hud.popup("CHAÎNE PERDUE", Hud.RED, 8, 232.0))
 	game.arrived.connect(_on_arrived)
 	game.time_up.connect(_on_time_up)
@@ -244,19 +264,20 @@ func _ready() -> void:
 		_start()
 	else:
 		hud.show_overlay("",
-				"Atteins l'aube avant la fin du chrono.\nRECORD %s   |   FINS %d/%d" % [
+				Lang.t("Atteins l'aube avant la fin du chrono.\nRECORD %s   |   FINS %d/%d") % [
 					Hud._group(save.best), save.endings.size(), RouteMap.ENDINGS.size()],
 				"POSE TON POUCE", true)
 	# Captures : ouvrir directement un écran du titre (--menu=garage, carnet, reglages).
-	match str(_args.get("menu", "")):
+	match str(_args.get("menu", reopen_menu)):
 		"garage":
 			menus.open_garage()
 		"carnet":
 			menus.open_journal()
 		"reglages":
 			menus.open_settings()
+	reopen_menu = ""
 	if daily_mode and not _args.has("autopilot"):
-		hud.popup("NUIT DU %s" % today().substr(8, 2) + "/" + today().substr(5, 2), Hud.LOU_BLUE, 12, 260.0)
+		hud.popup(Lang.t("NUIT DU %s") % today().substr(8, 2) + "/" + today().substr(5, 2), Hud.LOU_BLUE, 12, 260.0)
 	_update_chunks(true)
 	_place_car_and_camera(0.0)
 
@@ -650,7 +671,7 @@ func _update_events() -> void:
 		match name:
 			"radio_live":
 				var region: String = builder.theme_at(car.s)["name"]
-				_say(Scenario.RADIO["radio_live"] % [int(car.speed_kmh()), region.to_lower()])
+				_say(Lang.t(Scenario.RADIO["radio_live"]) % [int(car.speed_kmh()), Lang.t(region).to_lower()])
 			"fantome":
 				traffic.spawn_ghost(car)
 				_say(Scenario.RADIO["fantome"])
@@ -673,12 +694,12 @@ func _update_events() -> void:
 
 func _on_station(index: int, added: float) -> void:
 	hud.popup("+%d" % int(added), Hud.AMBER, 32, 140.0)
-	hud.popup("STATION %d" % (index + 1), Hud.WHITE, 8, 188.0)
+	hud.popup(Lang.t("STATION %d") % (index + 1), Hud.WHITE, 8, 188.0)
 	# À chaque station, un message de Lou attend sur le répondeur.
 	var region := RouteMap.theme_id(index, game.choices)
 	var fresh := _collect_message(region)
 	_radio_queue.push_front([Scenario.LOU[region], INF,
-			("NOUVEAU — " if fresh else "") + Scenario.LOU_HEADER])
+			(Lang.t("NOUVEAU — ") if fresh else "") + Lang.t(Scenario.LOU_HEADER)])
 	_write_save()
 
 
@@ -698,7 +719,7 @@ func _on_arrived(bonus: int) -> void:
 	var first_time := not _args.has("autopilot") and save.record_ending(game.ending, int(game.score))
 	# Le dernier message de Lou arrive avec l'aube.
 	var last_region := RouteMap.theme_id(RouteMap.STAGES.size() - 1, game.choices)
-	var lou := "%s\n« %s »" % [Scenario.LOU_HEADER, Scenario.LOU[last_region]]
+	var lou := Lang.t("%s\n« %s »") % [Lang.t(Scenario.LOU_HEADER), Lang.t(Scenario.LOU[last_region])]
 	_collect_message(last_region)
 	for f in game.flags:
 		save.events_seen[f] = true
@@ -706,11 +727,11 @@ func _on_arrived(bonus: int) -> void:
 	_write_save()
 	_begin_ending_scene()
 	_ending_overlay = [RouteMap.ENDINGS[game.ending],
-			"%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/6\n%s\n+%s CRÉDITS%s" % [
+			Lang.t("%s\n\n%s\n\n%sSCORE %s\nBONUS TEMPS %s\nÉVÉNEMENTS %d/6\n%s\n+%s CRÉDITS%s") % [
 				Scenario.ending_text(game.ending, game.flags), lou,
-				"NOUVELLE FIN ! " if first_time else "", Hud._group(int(game.score)), Hud._group(bonus),
-				game.flags.size(), "NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(save.best),
-				Hud._group(earned), "  —  nouvelle teinte au garage" if first_time else ""],
+				Lang.t("NOUVELLE FIN ! ") if first_time else "", Hud._group(int(game.score)), Hud._group(bonus),
+				game.flags.size(), Lang.t("NOUVEAU RECORD !") if record else Lang.t("RECORD %s") % Hud._group(save.best),
+				Hud._group(earned), Lang.t("  —  nouvelle teinte au garage") if first_time else ""],
 			"TOUCHE POUR REJOUER"]
 	_overlay_at = _time + ENDING_SCENE_TIME
 
@@ -723,9 +744,9 @@ func _on_time_up() -> void:
 	var earned := _earn_credits()
 	_write_save()
 	hud.show_overlay("LA NUIT\nGAGNE",
-			"\nÉTAPE %d SUR %d\n%.1f KM\n\nSCORE %s\n\n%s\n+%s CRÉDITS" % [
+			Lang.t("\nÉTAPE %d SUR %d\n%.1f KM\n\nSCORE %s\n\n%s\n+%s CRÉDITS") % [
 				game.segment() + 1, RunConfig.SEGMENT_COUNT, car.s / 1000.0, Hud._group(int(game.score)),
-				"NOUVEAU RECORD !" if record else "RECORD %s" % Hud._group(save.best), Hud._group(earned)],
+				Lang.t("NOUVEAU RECORD !") if record else Lang.t("RECORD %s") % Hud._group(save.best), Hud._group(earned)],
 			"TOUCHE POUR REJOUER")
 
 

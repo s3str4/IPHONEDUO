@@ -45,7 +45,10 @@ Options (Projet > Paramètres > Exécution, ou en ligne de commande après `--`)
 `--start_s=M` (démarre à M mètres, ex. 20000 pour voir l'aube),
 `--showcase` (écran de titre sans interface, pour regarder la voiture),
 `--menu=garage` (ouvre un écran du titre), `--storm_at=5` (éclair à 5 s),
-`--sliced` (route construite par étapes, comme dans le navigateur).
+`--sliced` (route construite par étapes, comme dans le navigateur),
+`--lang=en` ou `--lang=fr` (langue ; sinon celle du système ou des réglages).
+Sur la version web, les mêmes options passent par l'adresse :
+`?lang=en`, `?autopilot&path=1000&start_s=25850`.
 
 ## Tests
 

@@ -33,6 +33,8 @@ var owned := {}
 var neon_color := 0
 var spoiler_on := true
 var neon_on := true
+## Langue : "" (celle du système), "fr" ou "en".
+var language := ""
 
 
 static func load_or_new(p: String = PATH) -> SaveData:
@@ -66,6 +68,7 @@ static func load_or_new(p: String = PATH) -> SaveData:
 	s.neon_color = int(cfg.get_value("garage", "neon_color", 0))
 	s.spoiler_on = bool(cfg.get_value("garage", "spoiler_on", true))
 	s.neon_on = bool(cfg.get_value("garage", "neon_on", true))
+	s.language = str(cfg.get_value("settings", "language", ""))
 	return s
 
 
@@ -88,6 +91,7 @@ func write() -> void:
 	cfg.set_value("garage", "neon_color", neon_color)
 	cfg.set_value("garage", "spoiler_on", spoiler_on)
 	cfg.set_value("garage", "neon_on", neon_on)
+	cfg.set_value("settings", "language", language)
 	cfg.save(path)
 
 

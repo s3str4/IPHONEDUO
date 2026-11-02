@@ -90,4 +90,4 @@ static func ending_text(ending: int, flags: Dictionary) -> String:
 			if flags.has(key):
 				details = DETAILS[key]
 				break
-	return ENDINGS[ending][1] % details
+	return Lang.t(ENDINGS[ending][1]) % Lang.t(details)

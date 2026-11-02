@@ -236,7 +236,7 @@ func _ready() -> void:
 			["NUIT DU JOUR", daily_pressed], ["RÉGLAGES", settings_pressed]]
 	for i in titles.size():
 		var b := Button.new()
-		b.text = titles[i][0]
+		b.text = Lang.t(titles[i][0])
 		b.focus_mode = Control.FOCUS_NONE
 		b.position = Vector2(14 + (i % 2) * 124, 404 + (i / 2) * 34)
 		b.size = Vector2(118, 28)
@@ -263,7 +263,7 @@ func _ready() -> void:
 	_overlay_body.custom_minimum_size.x = 218.0
 	_overlay_hint = _label(_overlay, "", arcade_font(), 9, AMBER, Vector2(0, -92), HORIZONTAL_ALIGNMENT_CENTER, true, true)
 	_title_button = Button.new()
-	_title_button.text = "TITRE"
+	_title_button.text = Lang.t("TITRE")
 	_title_button.focus_mode = Control.FOCUS_NONE
 	_title_button.position = Vector2(105, 430)
 	_title_button.size = Vector2(60, 24)
@@ -293,9 +293,9 @@ func _process(delta: float) -> void:
 ## Une réplique de Radio Nuit, tapée lettre à lettre puis effacée.
 func radio(text: String, header: String = Scenario.STATION) -> void:
 	# Radio Nuit en rose ; les messages de Lou en bleu, comme un écran de téléphone.
-	_radio_header.text = header
+	_radio_header.text = Lang.t(header)
 	_radio_header.label_settings.font_color = PINK if header == Scenario.STATION else LOU_BLUE
-	_radio_full = text
+	_radio_full = Lang.t(text)
 	_radio_shown = 0.0
 	_radio_text.text = ""
 	_radio.visible = true
@@ -308,8 +308,8 @@ func radio_busy() -> bool:
 
 ## Directions de la prochaine bifurcation (vide : rien à afficher).
 func fork_prompt(left: String, right: String) -> void:
-	_fork_left.text = ("< " + left) if left != "" else ""
-	_fork_right.text = (right + " >") if right != "" else ""
+	_fork_left.text = ("< " + Lang.t(left)) if left != "" else ""
+	_fork_right.text = (Lang.t(right) + " >") if right != "" else ""
 	var on := fmod(_blink, 0.8) < 0.55
 	_fork_left.visible = on
 	_fork_right.visible = on
@@ -317,7 +317,7 @@ func fork_prompt(left: String, right: String) -> void:
 
 ## Titre de la région où l'on entre.
 func title_card(text: String) -> void:
-	_card.text = text
+	_card.text = Lang.t(text)
 	var tw := create_tween()
 	tw.tween_property(_card, "modulate:a", 1.0, 0.4)
 	tw.tween_interval(2.2)
@@ -343,7 +343,7 @@ func set_values(time_left: float, score: float, stage: int, multiplier: float, s
 	_time_caption.label_settings.font_color = col
 	_time.label_settings.font_color = WHITE if low and fmod(_blink, 0.5) < 0.2 else col
 	_score.text = _group(int(score))
-	_stage.text = "ÉTAPE %d/%d" % [stage + 1, RunConfig.SEGMENT_COUNT]
+	_stage.text = Lang.t("ÉTAPE %d/%d") % [stage + 1, RunConfig.SEGMENT_COUNT]
 	_mult.text = "x%.2f" % multiplier if multiplier > 1.0 else ""
 	_speed.text = str(int(round(speed_kmh)))
 	var lit := int(round(speed_kmh / (CarPhysics.TOP_SPEED * 3.6) * SPEED_SEGMENTS))
@@ -369,32 +369,44 @@ func popup(text: String, color: Color = AMBER, size: int = 16, y: float = 170.0)
 
 
 ## Écran de titre (logo, pas de panneau) ou de fin (titre et panneau).
+## Hauteur maximale du texte d'un écran de fin (le panneau s'arrête au-dessus du conseil).
+const OVERLAY_BODY_MAX := 268.0
+
+
 func show_overlay(title: String, body: String, hint: String, logo := false) -> void:
 	_overlay.visible = true
 	_overlay_logo.visible = logo
 	_title_button.visible = not logo
 	_play.visible = not logo and not _cinema
 	_panel.visible = not logo
-	_overlay_title.text = title
-	_overlay_body.text = body
+	_overlay_title.text = Lang.t(title)
+	_overlay_body.text = Lang.t(body)
 	_overlay_body.position.y = 300.0 if logo else 198.0
 	# Les fins se dévoilent lettre à lettre, comme la radio.
 	_overlay_body.visible_ratio = 1.0 if logo else 0.0
 	if not logo:
 		_radio.visible = false
-		_overlay_body.reset_size()
-		var lines := _overlay_body.get_line_count()
-		_panel.size.y = clampf(lines * 12.0 + 70.0, 200.0, 330.0)
-		_panel.position.y = 150.0 if _panel.size.y < 260.0 else 110.0
+		# Le texte doit tenir entre le haut de l'écran et « TOUCHE POUR REJOUER » :
+		# s'il est long (fin, message de Lou, scores), la police rapetisse.
+		var body_h := 0.0
+		for size in [12, 11, 10, 9]:
+			_overlay_body.label_settings.font_size = size
+			_overlay_body.reset_size()
+			# (get_line_count() ne compte que les lignes déjà dévoilées : 1 ici.)
+			body_h = _overlay_body.size.y
+			if body_h <= OVERLAY_BODY_MAX:
+				break
+		_panel.size.y = clampf(body_h + 66.0, 200.0, OVERLAY_BODY_MAX + 66.0)
+		_panel.position.y = clampf(260.0 - _panel.size.y * 0.5, 44.0, minf(150.0, 380.0 - _panel.size.y))
 		_overlay_title.position.y = _panel.position.y + 16.0
 		_overlay_body.position.y = _panel.position.y + 48.0
-	_overlay_hint.text = hint
+	_overlay_hint.text = Lang.t(hint)
 	_blink = 0.0
 
 
 ## Conseil affiché quelques secondes (première partie).
 func hint(text: String) -> void:
-	_hint.text = text
+	_hint.text = Lang.t(text)
 	var tw := create_tween()
 	tw.tween_property(_hint, "modulate:a", 1.0, 0.3)
 	tw.tween_interval(3.2)
@@ -457,7 +469,7 @@ func _shade(top: bool) -> TextureRect:
 func _label(parent: Control, text: String, font: Font, size: int, color: Color, pos: Vector2,
 		align: HorizontalAlignment, full_width := false, from_bottom := false, outline := -1) -> Label:
 	var l := Label.new()
-	l.text = text
+	l.text = Lang.t(text)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.horizontal_alignment = align
 	var ls := LabelSettings.new()
@@ -493,9 +505,4 @@ func _label(parent: Control, text: String, font: Font, size: int, color: Color, 
 
 
 static func _group(n: int) -> String:
-	var s := str(n)
-	var out := ""
-	while s.length() > 3:
-		out = " " + s.substr(s.length() - 3) + out
-		s = s.substr(0, s.length() - 3)
-	return s + out
+	return Lang.group(n)

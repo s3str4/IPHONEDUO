@@ -377,7 +377,7 @@ func _build_landmarks(env: SurfaceTool, glow: SurfaceTool, labels: Array, s0: fl
 		if st - STATION_SITE_BACK - STATION_SITE_HALF < s1 and st + 10.0 >= s0:
 			_build_station(env, glow, st, s0, s1)
 		if st >= s0 and st < s1:
-			labels.append(_build_gantry(env, glow, st, "STATION %d" % (stations.find(st) + 1)))
+			labels.append(_build_gantry(env, glow, st, Lang.t("STATION %d") % (stations.find(st) + 1)))
 		var sign_s := st - 1000.0
 		if sign_s >= s0 and sign_s < s1:
 			labels.append(_build_sign(env, sign_s, "STATION\n1 km"))
@@ -532,7 +532,7 @@ func _build_billboard(env: SurfaceTool, glow: SurfaceTool, s: float, k: int) -> 
 	_glow_box(glow, _road_pos(s, x, 5.8) + track.forward_at(s) * -0.14, yaw, Vector3(7.8, 3.8, 0.02), color, 0.55)
 	Halo.add(_halo, _road_pos(s, x, 8.0) + track.forward_at(s) * -0.8, 5.5, color, 0.22)
 	var label := Label3D.new()
-	label.text = entry[0]
+	label.text = Lang.t(entry[0])
 	label.font = Hud.text_font(true)
 	label.font_size = 96
 	label.pixel_size = 0.016
@@ -624,7 +624,7 @@ func _build_gantry(env: SurfaceTool, glow: SurfaceTool, s: float, text: String) 
 		_glow_box(glow, _road_pos(s, x, 6.1) + track.forward_at(s) * -0.45, yaw, Vector3(0.6, 0.25, 0.05), col, 1.0)
 		Halo.add(_halo, _road_pos(s, x, 6.2) + track.forward_at(s) * -0.6, 1.1, col, 0.45)
 	var label := Label3D.new()
-	label.text = text
+	label.text = Lang.t(text)
 	label.font = Hud.arcade_font()
 	label.font_size = 64
 	label.pixel_size = 0.016
@@ -642,7 +642,7 @@ func _build_sign(env: SurfaceTool, s: float, text: String) -> Label3D:
 	_box(env, _road_pos(s, 10.0, 0.0), yaw, Vector3(0.2, 3.0, 0.2), Color(0.3, 0.3, 0.32), 0.3)
 	_box(env, _road_pos(s, 10.0, 3.0), yaw, Vector3(3.6, 2.0, 0.15), Color(0.1, 0.25, 0.55), 0.6)
 	var label := Label3D.new()
-	label.text = text
+	label.text = Lang.t(text)
 	label.font = Hud.text_font(true)
 	label.font_size = 64
 	label.pixel_size = 0.012
