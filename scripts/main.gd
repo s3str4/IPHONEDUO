@@ -111,6 +111,10 @@ var _tutorial_step := 0
 var _tutorial_fork := false
 var _turbo_explained := false
 var _turbo_fov := 0.0
+## Effets de choc et micro-ralentis (temps réel, en ms).
+var _hit := 0.0
+var _slowmo_until := 0
+var _prev_speed := 0.0
 ## Orage : délai avant le prochain éclair, éclat en cours, tonnerre attendu.
 var _storm_wait := 14.0
 var _flash := 0.0
@@ -200,7 +204,9 @@ func _ready() -> void:
 			_turbo_explained = true
 			hud.hint("TURBO PRÊT : GLISSE LE POUCE VERS LE HAUT"))
 	hud.resume_requested.connect(_set_paused.bind(false))
-	game.near_miss.connect(func(_p: int) -> void: audio.play("whoosh", -4.0, randf_range(0.9, 1.15)))
+	game.near_miss.connect(func(_p: int) -> void:
+		audio.play("whoosh", -4.0, randf_range(0.9, 1.15))
+		_slowmo(0.4, 150))
 	game.station_reached.connect(func(_i: int, _t: float) -> void: audio.play("chime", -6.0))
 
 	game.station_reached.connect(_on_station)
@@ -249,12 +255,29 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	# Le ralenti est un réglage du moteur : il survivrait au rechargement de la scène.
+	Engine.time_scale = 1.0
 	if _building != -1:
 		WorkerThreadPool.wait_for_task_completion(_build_task_id)
 		_building = -1
 	if _pending != null:
 		_pending.free()
 		_pending = null
+
+
+## Choc : étincelles, flash, micro-ralenti.
+func _impact(side: float, strength: float) -> void:
+	car_view.sparks(side)
+	_hit = maxf(_hit, strength)
+	_slowmo(0.25, 200)
+
+
+## Micro-ralenti : le temps du jeu ralentit pendant `ms` millisecondes réelles.
+func _slowmo(scale: float, ms: int) -> void:
+	if _args.has("autopilot") and _args.has("capture"):
+		return
+	Engine.time_scale = scale
+	_slowmo_until = Time.get_ticks_msec() + ms
 
 
 func _try_turbo() -> void:
@@ -375,6 +398,7 @@ func _physics_process(delta: float) -> void:
 	if car.hit_rail:
 		_shake = 0.5 if car.hit_divider else 0.35
 		game.on_crash(car.s)
+		_impact(0.0 if car.hit_divider else signf(car.x), 0.7 if car.hit_divider else 0.4)
 		audio.play("thud" if car.hit_divider else "crash", 0.0 if car.hit_divider else -6.0)
 		Input.vibrate_handheld(150 if car.hit_divider else 60)
 	var th := builder.theme_at(car.s)
@@ -384,6 +408,7 @@ func _physics_process(delta: float) -> void:
 		if e.type == "crash":
 			_shake = 0.5
 			game.on_crash(car.s)
+			_impact(0.0, 0.8)
 			audio.play("crash", -2.0)
 			Input.vibrate_handheld(90)
 		else:
@@ -417,6 +442,7 @@ func _process(delta: float) -> void:
 	_update_storm(delta)
 	_update_lighting(delta)
 	_update_tutorial()
+	_update_feel(delta)
 	if _fps_label:
 		_fps_label.text = "%d i/s" % Engine.get_frames_per_second()
 	audio.update(car.speed, input.throttle if not _args.has("autopilot") else 1.0, _rain if builder.theme_at(car.s).get("rain", 1.0) > 0.0 else 0.0,
@@ -448,6 +474,23 @@ func _update_dawn() -> void:
 	_sky_material.set_shader_parameter("zenith", NIGHT_ZENITH.lerp(DAWN_ZENITH, d * d))
 	RenderingServer.global_shader_parameter_set("fog_color", _fog_tint.lerp(DAWN_FOG, d * 0.8))
 	environment.ambient_light_energy = lerpf(0.5, 1.6, d)
+
+
+## Sensations : caisse vivante, gerbes d'eau, flash de choc, fin des ralentis.
+func _update_feel(delta: float) -> void:
+	if _slowmo_until > 0 and Time.get_ticks_msec() > _slowmo_until:
+		Engine.time_scale = 1.0
+		_slowmo_until = 0
+	if delta <= 0.0:
+		return
+	var accel := (car.speed - _prev_speed) / delta
+	_prev_speed = car.speed
+	car_view.animate(accel, car.lateral, car.speed, delta)
+	var th := builder.theme_at(car.s)
+	var wet := 0.0 if builder.in_tunnel(car.s) or th.get("rain", 1.0) < 0.0 else maxf(0.35, th.get("rain", 1.0))
+	car_view.set_spray(clampf((car.speed - 8.0) / 60.0, 0.0, 1.0) * wet, builder.lamp_light(car.s, car.x))
+	_hit = move_toward(_hit, 0.0, delta * 3.0)
+	_post_material.set_shader_parameter("hit", _hit)
 
 
 ## Orage, sous la pluie battante : un éclair de temps en temps (double éclat

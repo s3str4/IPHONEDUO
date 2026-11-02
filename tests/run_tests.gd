@@ -26,6 +26,7 @@ func _initialize() -> void:
 	await _test_audio_and_double_tap()
 	await _test_turbo()
 	_test_save_and_garage()
+	await _test_car_feel()
 	await _test_thumb_input()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -742,3 +743,21 @@ func _test_save_and_garage() -> void:
 					bad += ch
 	_check(bad == "", "polices : messages et carnet affichables", bad)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+func _test_car_feel() -> void:
+	await process_frame
+	var view := CarView.new()
+	root.add_child(view)
+	await process_frame
+	# Une image très longue et une accélération absurde ne doivent pas faire
+	# diverger la suspension (la voiture disparaissait au premier pas de temps).
+	view.animate(2500.0, 30.0, 70.0, 0.5)
+	for i in 120:
+		view.animate(-40.0, -12.0, 70.0, 1.0 / 60.0)
+	var r: Vector3 = view.get_child(0).rotation
+	_check(r.is_finite() and absf(r.x) <= 0.08 and absf(r.z) <= 0.1, "voiture : suspension bornée et stable", str(r))
+	# Vers la gauche (vitesse latérale négative), le flanc droit (+X) descend : rotation z < 0.
+	_check(r.x < 0.0 and r.z < 0.0, "voiture : plonge au freinage, penche vers l'extérieur", str(r))
+	view.queue_free()
+	await process_frame

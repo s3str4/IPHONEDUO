@@ -8,6 +8,8 @@ uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
 uniform float rain = 1.0;
 // Vitesse de la voiture (0..1, plus sous turbo) : flou radial et aberration.
 uniform float speed = 0.0;
+// Choc (0..1, retombe vite) : flash chaud et aberration.
+uniform float hit = 0.0;
 uniform float vignette = 0.45;
 uniform float grain = 0.035;
 uniform float exposure = 1.08;
@@ -64,13 +66,14 @@ void fragment() {
 	for (int i = 0; i < 6; i++) {
 		float k = float(i) / 5.0;
 		vec2 o = dir * blur * k;
-		float ca = speed * 0.004 * edge * 4.0;
+		float ca = (speed * 0.004 + hit * 0.012) * edge * 4.0;
 		c.r += texture(screen_tex, uv - o * (1.0 + ca * 40.0) - dir * ca).r;
 		c.g += texture(screen_tex, uv - o).g;
 		c.b += texture(screen_tex, uv - o * (1.0 - ca * 40.0) + dir * ca).b;
 	}
 	c /= 6.0;
 	c += vec3(0.55, 0.6, 0.7) * (a.z + b.z) * 0.3;
+	c += vec3(0.35, 0.12, 0.05) * hit * (0.3 + edge * 3.0);
 
 	// Étalonnage : ombres froides, lumières chaudes, léger contraste.
 	c *= exposure;
