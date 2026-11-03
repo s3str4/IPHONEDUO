@@ -94,6 +94,8 @@ var save: SaveData
 var menus: Menus
 ## File de Radio Nuit : [texte, s au-delà duquel la réplique n'a plus de sens].
 var _radio_queue := []
+## Messages complets reçus cette nuit : [en-tête, texte], lus à la pause.
+var _night_log := []
 var _low_time_said := false
 var _fork_said := false
 var _prev_s := 0.0
@@ -373,7 +375,18 @@ func _set_paused(on: bool) -> void:
 	if on and game.state != GameRun.State.RUNNING:
 		return
 	get_tree().paused = on
-	hud.show_pause(on)
+	hud.show_pause(on, _pause_messages())
+
+
+## Les quatre derniers messages complets, du plus récent au plus ancien.
+func _pause_messages() -> String:
+	if _night_log.is_empty():
+		return ""
+	var out := Lang.t("MESSAGES DE CETTE NUIT") + "\n"
+	for i in range(_night_log.size() - 1, maxi(-1, _night_log.size() - 5), -1):
+		var m: Array = _night_log[i]
+		out += "\n" + Lang.t(m[0]) + "\n" + Lang.t(m[1]) + "\n"
+	return out
 
 
 func _notification(what: int) -> void:
@@ -478,8 +491,8 @@ func _sync_choices() -> void:
 
 ## Ajoute une réplique à la file de Radio Nuit ; elle est oubliée si la
 ## voiture a passé `until_s` avant qu'elle ait pu passer à l'antenne.
-func _say(text: String, until_s := INF) -> void:
-	_radio_queue.append([text, until_s, Scenario.STATION])
+func _say(text: String, until_s := INF, short := "") -> void:
+	_radio_queue.append([text, until_s, Scenario.STATION, short])
 
 
 func _physics_process(delta: float) -> void:
@@ -592,7 +605,11 @@ func _process(delta: float) -> void:
 	while not _radio_queue.is_empty() and not hud.radio_busy():
 		var line: Array = _radio_queue.pop_front()
 		if car.s < line[1]:
-			hud.radio(line[0], line[2])
+			# En course : la version courte ; le texte complet va au journal de la nuit.
+			var full: String = line[0]
+			var shown: String = line[3] if line[3] != "" else Scenario.short(full)
+			hud.radio(shown, line[2])
+			_night_log.append([line[2], full])
 			audio.play("static", -16.0)
 	var cur := int(floor(car.s / RoadBuilder.CHUNK_LENGTH))
 	for i in range(cur, cur + 3):
@@ -792,7 +809,8 @@ func _update_events() -> void:
 		match name:
 			"radio_live":
 				var region: String = builder.theme_at(car.s)["name"]
-				_say(Lang.t(Scenario.RADIO["radio_live"]) % [int(car.speed_kmh()), Lang.t(region).to_lower()])
+				_say(Lang.t(Scenario.RADIO["radio_live"]) % [int(car.speed_kmh()), Lang.t(region).to_lower()], INF,
+						Lang.t(Scenario.RADIO_LIVE_SHORT) % int(car.speed_kmh()))
 			"fantome":
 				traffic.spawn_ghost(car)
 				_say(Scenario.RADIO["fantome"])
@@ -850,7 +868,7 @@ func _on_station(index: int, added: float) -> void:
 	var region := RouteMap.theme_id(index, game.choices)
 	var fresh := _collect_message(region)
 	_radio_queue.push_front([Scenario.LOU[region], INF,
-			(Lang.t("NOUVEAU — ") if fresh else "") + Lang.t(Scenario.LOU_HEADER)])
+			(Lang.t("NOUVEAU — ") if fresh else "") + Lang.t(Scenario.LOU_HEADER), Scenario.LOU_SHORT])
 	_write_save()
 
 

@@ -40,6 +40,8 @@ var _radio_header: Label
 var _radio_text: Label
 var _radio_full := ""
 var _radio_shown := 0.0
+var _radio_plate: Panel
+var _radio_style: StyleBoxFlat
 var _radio_hide_at := 0.0
 var _fork_left: Label
 var _fork_right: Label
@@ -213,18 +215,35 @@ func _ready() -> void:
 	_fork_left.offset_right = 200.0
 
 	# Radio Nuit : bandeau au-dessus du compteur, texte tapé lettre à lettre.
-	_radio = ColorRect.new()
-	(_radio as ColorRect).color = Color(0.02, 0.01, 0.06, 0.72)
-	_radio.position = Vector2(10, 330)
-	_radio.size = Vector2(250, 62)
+	# Sous-titre néon en haut, sur le ciel : une phrase courte, lisible d'un coup
+	# d'œil en conduisant (le texte complet se lit à la pause).
+	_radio = Control.new()
+	_radio.position = Vector2(8, 104)
+	_radio.size = Vector2(254, 48)
 	_radio.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_play.add_child(_radio)
-	_radio_header = _label(_radio, Scenario.STATION, arcade_font(), 8, PINK, Vector2(6, 4), HORIZONTAL_ALIGNMENT_LEFT)
-	_radio_header.offset_right = 244.0
-	_radio_text = _label(_radio, "", text_font(), 11, WHITE, Vector2(6, 16), HORIZONTAL_ALIGNMENT_LEFT)
-	_radio_text.offset_right = 244.0
+	# Plaque sombre aux bords néon : lisible même devant le soleil.
+	_radio_plate = Panel.new()
+	_radio_plate.position = Vector2(0, -4)
+	_radio_plate.size = Vector2(254, 58)
+	_radio_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_radio_style = StyleBoxFlat.new()
+	_radio_style.bg_color = Color(0.03, 0.0, 0.08, 0.62)
+	_radio_style.border_color = Color(1.0, 0.3, 0.7, 0.7)
+	_radio_style.set_border_width_all(1)
+	_radio_style.set_corner_radius_all(6)
+	_radio_plate.add_theme_stylebox_override("panel", _radio_style)
+	_radio.add_child(_radio_plate)
+	_radio_header = _label(_radio, Scenario.STATION, arcade_font(), 7, PINK, Vector2(0, 0), HORIZONTAL_ALIGNMENT_CENTER)
+	_radio_header.size.x = 254.0
+	_radio_text = _label(_radio, "", text_font(true), 13, WHITE, Vector2(0, 11), HORIZONTAL_ALIGNMENT_CENTER)
+	_radio_text.size.x = 254.0
 	_radio_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_radio_text.label_settings.line_spacing = 3.0
+	_radio_text.label_settings.outline_size = 5
+	_radio_text.label_settings.line_spacing = -3.0
+	_radio_text.label_settings.outline_color = Color(0.05, 0.0, 0.1, 0.9)
+	_radio_text.label_settings.shadow_color = Color(1.0, 0.3, 0.7, 0.55)
+	_radio_text.label_settings.shadow_size = 8
 	_radio.visible = false
 
 	# Titre de région (« LA FORÊT ») au centre, qui apparaît puis s'efface.
@@ -341,25 +360,29 @@ func _process(delta: float) -> void:
 	if _overlay.visible:
 		_overlay_hint.visible = fmod(_blink, 1.0) < 0.65
 	if _radio.visible:
-		_radio_shown = minf(_radio_shown + delta * 38.0, _radio_full.length())
+		_radio_shown = minf(_radio_shown + delta * 70.0, _radio_full.length())
 		_radio_text.text = _radio_full.substr(0, int(_radio_shown))
 		_radio_hide_at -= delta
+		_radio.modulate.a = clampf(_radio_hide_at / 0.4, 0.0, 1.0)
 		if _radio_hide_at <= 0.0:
 			_radio.visible = false
 	if _overlay.visible and _overlay_body.visible_ratio < 1.0:
 		_overlay_body.visible_ratio = minf(1.0, _overlay_body.visible_ratio + delta * 38.0 / maxf(1.0, _overlay_body.text.length()))
 
 
-## Une réplique de Radio Nuit, tapée lettre à lettre puis effacée.
+## Sous-titre court (Radio Nuit en rose, Lou en bleu), tapé vite puis effacé.
 func radio(text: String, header: String = Scenario.STATION) -> void:
-	# Radio Nuit en rose ; les messages de Lou en bleu, comme un écran de téléphone.
+	var lou := header != Scenario.STATION
 	_radio_header.text = Lang.t(header)
-	_radio_header.label_settings.font_color = PINK if header == Scenario.STATION else LOU_BLUE
+	_radio_header.label_settings.font_color = PINK if not lou else LOU_BLUE
+	_radio_text.label_settings.shadow_color = Color(1.0, 0.3, 0.7, 0.55) if not lou else Color(0.3, 0.7, 1.0, 0.55)
 	_radio_full = Lang.t(text)
 	_radio_shown = 0.0
 	_radio_text.text = ""
+	_radio.modulate.a = 1.0
 	_radio.visible = true
-	_radio_hide_at = text.length() / 38.0 + 4.0
+	_radio_hide_at = _radio_full.length() / 70.0 + 3.2
+	_radio_style.border_color = Color(1.0, 0.3, 0.7, 0.7) if not lou else Color(0.35, 0.75, 1.0, 0.7)
 
 
 func radio_busy() -> bool:
@@ -506,10 +529,11 @@ func show_share(on: bool) -> void:
 	_title_button.position.x = 145.0 if on else 105.0
 
 
-func show_pause(on: bool) -> void:
+## Pause : les messages complets de la nuit (Marceau et Lou), à lire au calme.
+func show_pause(on: bool, messages := "") -> void:
 	_paused = on
 	if on:
-		show_overlay("PAUSE", "", "TOUCHE POUR REPRENDRE")
+		show_overlay("PAUSE", messages, "TOUCHE POUR REPRENDRE")
 		_play.visible = true
 	else:
 		hide_overlay()

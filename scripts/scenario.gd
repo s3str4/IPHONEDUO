@@ -44,6 +44,80 @@ const RADIO := {
 	"arrete": "Contrôle. Papiers, ballon, lampe dans les yeux... Ils vous laissent repartir. Le jour, lui, n'a pas attendu.",
 }
 
+## Versions courtes, affichées en course (une idée, lisible d'un coup d'œil) ;
+## le texte complet se lit à la pause. Clé : la réplique complète.
+const SHORT := {
+	"3 h 12. Ici Marceau, Radio Nuit. À ceux qui roulent : je reste avec vous jusqu'à l'aube.":
+			"Radio Nuit, 3 h 12. Je reste avec vous jusqu'à l'aube.",
+	"Le téléphone a sonné. Une voix : « Je t'attends à l'aube. Tu sais où. » Vous ne savez pas.":
+			"« Je t'attends à l'aube. Tu sais où. »",
+	"Deux routes devant vous. On ne prend jamais la même deux fois.":
+			"Deux routes. À vous de choisir.",
+	"Le jour ne vous attendra pas. Plus vite.":
+			"Le jour n'attendra pas. Plus vite.",
+	"Une station. Un café, de l'essence, et on repart.":
+			"Une station. Du café, et on repart.",
+	"La forêt. Plus de lampadaires. Juste vos phares, et les arbres qui écoutent.":
+			"La forêt. Juste vos phares.",
+	"Le port. Les grues dorment debout. Les bateaux ne partent qu'à l'aube.":
+			"Le port. Les bateaux partent à l'aube.",
+	"Le lac. Lou y nageait la nuit, l'été de ses seize ans. Vous vous souvenez ?":
+			"Le lac où Lou nageait, à seize ans.",
+	"Les faubourgs. Une fenêtre sur dix est allumée. Quelqu'un attend, derrière.":
+			"Une fenêtre allumée. Quelqu'un attend.",
+	"Les usines ne dorment jamais. Elles respirent du feu.":
+			"Les usines respirent du feu.",
+	"La côte. On entend la mer avant de la voir.":
+			"On entend la mer avant de la voir.",
+	"Le périphérique. Mille voitures, et pas une ne va où vous allez.":
+			"Mille voitures. Aucune ne va où vous allez.",
+	"La vallée. Le barrage est au bout. Là où vous vous êtes disputés, Lou et vous.":
+			"Le barrage, au bout. Là où tout s'est cassé.",
+	"Le col. Il neige là-haut, même en juin. Lou disait qu'on y voyait l'aube avant tout le monde.":
+			"Là-haut, on voit l'aube en premier.",
+	"Les dunes. La mer est juste derrière. Le ciel pâlit déjà.":
+			"La mer est juste derrière. Le ciel pâlit.",
+	"Le centre. Les cafés ouvrent. Quelqu'un pose deux tasses sur une table.":
+			"Quelqu'un pose deux tasses sur une table.",
+	"La retenue. L'eau est si calme qu'on dirait un deuxième ciel.":
+			"L'eau calme, comme un deuxième ciel.",
+	"Les tunnels. Gardez le cap. Ne comptez pas les lampes.":
+			"Les tunnels. Ne comptez pas les lampes.",
+	"...je ne connais pas cette route. Elle n'est sur aucune carte. Vous êtes sûr ?":
+			"Cette route n'est sur aucune carte.",
+	"Vous l'avez vue ? La fille au bord de la route, le pouce levé. Elle est là chaque nuit. Un peu plus loin.":
+			"La fille au pouce levé. Chaque nuit, plus loin.",
+	"Vous êtes ici. Vous êtes ici. Vous êtes ici. Moi aussi, j'ai cru que la route tournait en rond.":
+			"Vous êtes ici. Encore. Et encore.",
+	"La voiture à côté de vous, phares éteints... Elle ressemblait à la vôtre. Il y a dix ans.":
+			"Cette voiture sans phares… c'était la vôtre.",
+	"Une station vide. Tout est allumé. Personne. Une seule pompe décrochée, qui pend.":
+			"Une station vide. Une pompe qui pend.",
+	"Ce tunnel est trop long. Le temps s'est arrêté, on dirait. Profitez-en.":
+			"Ce tunnel est trop long. Le temps s'arrête.",
+	"Entre nous : une patrouille attend plus loin, au bord de la route. Au-dessus de 200, elle vous prend en chasse. Moi, je n'ai rien dit.":
+			"Patrouille devant. Au-dessus de 200, elle chasse.",
+	"Encore une patrouille devant. Ils écoutent la radio, maintenant. À vous de voir.":
+			"Encore une patrouille. Ils écoutent la radio.",
+	"Ils ont entendu l'antenne : une voiture rouge qui file vers l'aube. Ne vous laissez pas toucher. Trois fois, c'est le contrôle.":
+			"Ils vous cherchent. Trois touches, et c'est fini.",
+	"Plus de gyrophares dans le rétro. Ils vous ont perdu. Respirez.":
+			"Plus de gyrophares. Respirez.",
+	"Fin de leur secteur : ils font demi-tour. La nuit est à vous.":
+			"Fin de leur secteur. La nuit est à vous.",
+	"Contrôle. Papiers, ballon, lampe dans les yeux... Ils vous laissent repartir. Le jour, lui, n'a pas attendu.":
+			"Contrôle. Le jour, lui, n'a pas attendu.",
+}
+## Réplique « la radio parle de toi », en course (vitesse en km/h).
+const RADIO_LIVE_SHORT := "On parle de vous à l'antenne : %d km/h."
+const LOU_SHORT := "MESSAGE DE LOU REÇU — À LIRE À LA PAUSE"
+
+
+## Version courte d'une réplique (elle-même si elle est déjà courte).
+static func short(full: String) -> String:
+	return SHORT.get(full, full)
+
+
 ## Messages vocaux de Lou, un par tronçon : reçus à la station qui le termine
 ## (à l'aube pour la dernière étape), gardés dans le carnet de route. Dix ans de
 ## messages jamais écoutés ; ils se lisent dans n'importe quel ordre.

@@ -32,6 +32,7 @@ func _initialize() -> void:
 	_test_police()
 	_test_ghost()
 	_test_fair_traffic()
+	_test_short_lines()
 	await _test_english()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -1126,3 +1127,19 @@ func _test_fair_traffic() -> void:
 	var ev := tr.update(car, 1.0 / 60.0)
 	_check(ev.size() == 1 and ev[0].type == "crash" and car.speed >= 70.0 * Traffic.SCRAPE_SPEED_KEPT - 0.01,
 			"trafic : frottement de côté, petite perte seulement", "v %.1f" % car.speed)
+
+
+## En course, une réplique se lit d'un coup d'œil : chacune a sa version courte.
+func _test_short_lines() -> void:
+	var missing := []
+	var long := []
+	for key in Scenario.RADIO:
+		if key == "radio_live":
+			continue
+		var s := Scenario.short(Scenario.RADIO[key])
+		if s == Scenario.RADIO[key]:
+			missing.append(key)
+		if s.length() > 60 or Lang.EN.get(s, "").length() > 60:
+			long.append(key)
+	_check(missing.is_empty(), "textes : chaque réplique a sa version courte", str(missing))
+	_check(long.is_empty(), "textes : versions courtes de 60 signes au plus (FR et EN)", str(long))
