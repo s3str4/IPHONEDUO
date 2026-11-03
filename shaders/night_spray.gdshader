@@ -14,5 +14,6 @@ void fragment() {
 	float along = (1.0 - UV.y) * smoothstep(0.0, 0.08, UV.y);
 	float across = 1.0 - abs(UV.x - 0.5) * 2.0;
 	ALBEDO = tint;
-	ALPHA = clamp(amount * mist * along * across * 2.6, 0.0, 0.85);
+	// Discrète : plus opaque, elle cachait la route derrière la voiture.
+	ALPHA = clamp(amount * mist * along * across * 1.5, 0.0, 0.45);
 }

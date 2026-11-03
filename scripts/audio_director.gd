@@ -60,7 +60,9 @@ func _ready() -> void:
 	_siren = _loop("siren", -80.0)
 	_music = AudioStreamPlayer.new()
 	_music.bus = AudioServer.get_bus_name(_music_bus)
-	_music.volume_db = -9.0
+	# Mélange : en pleine course, la musique passait 17 dB sous le moteur, le
+	# vent et la pluie (inaudible). Elle est maintenant ~5 dB sous les bruitages.
+	_music.volume_db = 0.0
 	add_child(_music)
 	for i in 6:
 		var p := AudioStreamPlayer.new()
@@ -86,12 +88,12 @@ func update(speed: float, throttle: float, rain_amount: float, tunnel: bool, del
 	var load := 1.0 if throttle > 0.0 else 0.55
 	_engine_low.pitch_scale = 0.55 + rpm * 1.25
 	_engine_high.pitch_scale = 0.5 + rpm * 1.15
-	_engine_low.volume_db = linear_to_db(lerpf(0.9, 0.45, rpm) * load * _engine_fade + 0.001) - 6.0
-	_engine_high.volume_db = linear_to_db(pow(rpm, 1.6) * load * 0.8 * _engine_fade + 0.001) - 6.0
+	_engine_low.volume_db = linear_to_db(lerpf(0.9, 0.45, rpm) * load * _engine_fade + 0.001) - 9.0
+	_engine_high.volume_db = linear_to_db(pow(rpm, 1.6) * load * 0.8 * _engine_fade + 0.001) - 9.0
 	var v := clampf(speed / CarPhysics.TOP_SPEED, 0.0, 1.0)
-	_wind.volume_db = linear_to_db(v * v * 0.7 + 0.001) - 4.0
-	_tires.volume_db = linear_to_db(pow(v, 1.4) * rain_amount * 0.6 + 0.001) - 6.0
-	_rain.volume_db = linear_to_db((0.0 if tunnel else rain_amount) * 0.7 + 0.001) - 4.0
+	_wind.volume_db = linear_to_db(v * v * 0.7 + 0.001) - 7.0
+	_tires.volume_db = linear_to_db(pow(v, 1.4) * rain_amount * 0.6 + 0.001) - 9.0
+	_rain.volume_db = linear_to_db((0.0 if tunnel else rain_amount) * 0.7 + 0.001) - 7.0
 	_reverb.wet = move_toward(_reverb.wet, 0.35 if tunnel else 0.0, delta * 1.5)
 
 

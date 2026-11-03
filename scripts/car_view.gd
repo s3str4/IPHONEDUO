@@ -87,13 +87,20 @@ func animate(accel: float, lateral: float, speed: float, delta: float) -> void:
 
 ## Gerbes d'eau : intensité 0..1 (vitesse × humidité), teintées par la lumière.
 func set_spray(amount: float, light: float) -> void:
-	var lit := 0.5 + light * 0.9
+	var lit := 0.4 + light * 0.5
 	_spray_material.set_shader_parameter("amount", amount)
 	_spray_material.set_shader_parameter("tint", Vector3(0.62, 0.68, 0.8) * lit)
 	_spray.visible = amount > 0.02
 
 
 ## Gerbe d'étincelles du côté touché (-1 gauche, 1 droite, 0 devant).
+## Préchauffage : une gerbe tirée hors de vue (voir Main).
+func warm_sparks(where: Vector3) -> void:
+	_sparks.global_position = where
+	_sparks.restart()
+	_sparks.emitting = true
+
+
 func sparks(side: float) -> void:
 	_sparks.position = Vector3(side * 0.95, 0.4, -1.6 if side == 0.0 else 0.3)
 	_sparks.restart()

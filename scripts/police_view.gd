@@ -63,6 +63,14 @@ func _lamp(x: float, color: Color, glow: Material) -> MeshInstance3D:
 	return mi
 
 
+## Préchauffage (voir Main) : visible, gyrophares allumés, à l'endroit donné.
+func warm_up(where: Transform3D, on: bool) -> void:
+	visible = on
+	transform = where
+	_red.visible = on
+	_blue.visible = on
+
+
 ## Rouge allumé pendant la première moitié de la période, bleu ensuite.
 static func red_on(t: float) -> bool:
 	return fmod(t, FLASH) < FLASH * 0.5

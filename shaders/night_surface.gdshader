@@ -19,6 +19,9 @@ uniform float specular_strength = 0.4;
 uniform vec3 baked_tint = vec3(1.0, 0.62, 0.28);
 uniform float baked_strength = 1.6;
 uniform float ripples = 0.0;
+// Route : la peinture des marquages (texels clairs) est moins glissante sous la
+// pluie et renvoie la lumière des phares vers la voiture (rétroréflexion).
+uniform float marking = 0.0;
 
 void fragment() {
 	vec3 P = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -35,6 +38,8 @@ void fragment() {
 	vec4 tex = texture(albedo_tex, UV * uv_scale);
 	vec3 base = tex.rgb * albedo_color.rgb * COLOR.rgb;
 	float wetness = wet * mix(0.45, 1.0, tex.a);
+	float paint = marking * smoothstep(0.18, 0.35, dot(tex.rgb, vec3(0.333)));
+	wetness *= 1.0 - paint * 0.75;
 
 	// Rides de pluie : la normale tremble un peu dans les flaques.
 	vec2 rip = vec2(0.0);
@@ -51,7 +56,8 @@ void fragment() {
 	vec3 amb = sky_ambient.rgb * (0.4 + 0.6 * max(N.y, 0.0));
 	float far = smoothstep(80.0, 150.0, dist);
 	vec3 baked = baked_tint * COLOR.a * baked_strength * mix(0.25, 1.0, far);
-	vec3 col = base * (amb + dif + baked + night_headlight(P, N))
+	vec3 head = night_headlight(P, N);
+	vec3 col = base * (amb + dif + baked + head * (1.0 + paint * 2.5)) + base * paint * 0.05
 			+ spe * specular_strength * (0.1 + 0.9 * wetness * wetness);
 
 	// Reflet miroir : la caméra de réflexion voit la scène sous la route.
@@ -59,7 +65,7 @@ void fragment() {
 		float fres = night_fresnel(N, V, 0.04);
 		vec2 ruv = SCREEN_UV + rip * 0.02;
 		vec3 refl = texture(reflection_tex, ruv).rgb;
-		float k = clamp(fres * wetness * reflectivity * 1.4, 0.0, 0.95);
+		float k = clamp(fres * wetness * reflectivity * 1.4, 0.0, 0.6);
 		col = col * (1.0 - k * 0.6) + refl * k;
 	}
 	col = mix(night_tonemap(col), fog_color.rgb, night_fog(dist));

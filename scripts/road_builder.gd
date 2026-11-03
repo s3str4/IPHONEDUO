@@ -89,8 +89,10 @@ func _init(p_track: Track, seed: int = 1) -> void:
 	road_material.shader = surface
 	road_material.set_shader_parameter("albedo_tex", load("res://assets/textures/road.png"))
 	road_material.set_shader_parameter("wet", 0.9)
-	road_material.set_shader_parameter("reflectivity", 0.85)
-	road_material.set_shader_parameter("specular_strength", 0.5)
+	# Reflets plus discrets : la route mouillée gênait la lecture (retour de test).
+	road_material.set_shader_parameter("reflectivity", 0.5)
+	road_material.set_shader_parameter("specular_strength", 0.05)
+	road_material.set_shader_parameter("marking", 1.0)
 	road_material.set_shader_parameter("ripples", 0.25)
 	env_material = ShaderMaterial.new()
 	env_material.shader = surface
@@ -357,6 +359,7 @@ func step_chunk(job: Dictionary) -> bool:
 		match phase - GROUND_SLICES:
 			1:
 				_build_rails(env, s0, s1)
+				_build_delineators(glow, s0, s1)
 				_build_lamps(env, glow, s0, s1)
 			2:
 				_build_trees(env, job["index"], s0, s1)
@@ -796,6 +799,22 @@ func _build_rails(st: SurfaceTool, s0: float, s1: float) -> void:
 			_quad(st, face, [metal, metal, metal, metal], lights)
 			if i % 2 == 0:
 				_box(st, _road_pos(sa, x + 0.15 * side, 0.0), track.yaw_at(sa), Vector3(0.12, 0.8, 0.12), post, la)
+
+
+## Balises réfléchissantes sur les glissières, tous les 25 m : blanches à
+## droite, orange à gauche, comme sur l'autoroute. De loin, elles dessinent le
+## virage qui arrive (lisibilité de nuit, sous la pluie).
+const DELINEATOR_SPACING := 25.0
+
+
+func _build_delineators(glow: SurfaceTool, s0: float, s1: float) -> void:
+	for s in _every(DELINEATOR_SPACING, 0.0, s0, s1):
+		if in_tunnel(s) or _near_checkpoint(s, 30.0):
+			continue
+		var yaw := track.yaw_at(s)
+		for side in [-1.0, 1.0]:
+			var c := Color(1.0, 0.95, 0.85) if side > 0.0 else Color(1.0, 0.55, 0.15)
+			_glow_box(glow, _road_pos(s, 7.9 * side, 0.58), yaw, Vector3(0.07, 0.24, 0.12), c, 2.2)
 
 
 func _build_lamps(env: SurfaceTool, glow: SurfaceTool, s0: float, s1: float) -> void:

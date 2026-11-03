@@ -104,6 +104,8 @@ var _ghost_rec: Ghost
 var _ghost_lost := false
 var _run_time := 0.0
 var _seed := 1
+## Préchauffage des effets rares (voir _warm_up_step), en images restantes.
+var _warm_frames := 4
 var _share: ShareCard
 ## Brouillard et météo courants, qui glissent vers ceux de l'ambiance.
 var _fog_scale := 1.0
@@ -259,8 +261,7 @@ func _ready() -> void:
 			hud.hint("TURBO PRÊT : GLISSE LE POUCE VERS LE HAUT"))
 	hud.resume_requested.connect(_set_paused.bind(false))
 	game.near_miss.connect(func(_p: int) -> void:
-		audio.play("whoosh", -4.0, randf_range(0.9, 1.15))
-		_slowmo(0.4, 150))
+		audio.play("whoosh", -4.0, randf_range(0.9, 1.15)))
 	game.station_reached.connect(func(_i: int, _t: float) -> void: audio.play("chime", -6.0))
 
 	game.station_reached.connect(_on_station)
@@ -324,7 +325,7 @@ func _exit_tree() -> void:
 func _impact(side: float, strength: float) -> void:
 	car_view.sparks(side)
 	_hit = maxf(_hit, strength)
-	_slowmo(0.25, 200)
+	# Plus de micro-ralenti aux chocs : ressenti comme un freeze (retour de test).
 
 
 ## Micro-ralenti : le temps du jeu ralentit pendant `ms` millisecondes réelles.
@@ -530,6 +531,7 @@ func _process(delta: float) -> void:
 	traffic_view.sync(traffic, track)
 	police_view.sync(police, car, track, builder.water_side, delta)
 	_update_ghost()
+	_warm_up_step()
 	var ram_side := 99
 	if police.state == Police.State.RAM:
 		var dx := police.ram_x - car.x
@@ -696,7 +698,8 @@ func _update_lighting(delta: float) -> void:
 	# Le néon sous caisse éclaire la chaussée (et se reflète dedans).
 	var neon := car_view.neon_color()
 	if neon != Color.BLACK:
-		sources.append([car_view.global_position + Vector3.UP * 0.25, neon, 7.0, 3.0])
+		# Discret : plus fort, il saturait en tache blanche derrière la voiture.
+		sources.append([car_view.global_position + Vector3.UP * 0.25, neon, 5.0, 1.1])
 	sources.append_array(_ending.get("lights", []))
 	sources.append_array(police_view.light_sources())
 	_lights.update(sources, cam, delta)
@@ -853,6 +856,23 @@ func _on_arrived(bonus: int) -> void:
 				Hud._group(earned), Lang.t("  —  nouvelle teinte au garage") if first_time else ""],
 			"TOUCHE POUR REJOUER"]
 	_overlay_at = _time + ENDING_SCENE_TIME
+
+
+## Préchauffage : les effets rares (étincelles, hologramme du fantôme, voiture
+## de police et ses gyrophares) sont dessinés quelques images, cachés sous la
+## route, pendant le chargement. Le navigateur compile leurs shaders à ce
+## moment-là plutôt qu'au premier choc (qui figeait l'image un instant).
+func _warm_up_step() -> void:
+	if _warm_frames <= 0:
+		return
+	_warm_frames -= 1
+	var hidden := track.transform_at(car.s + 14.0, 0.0, -2.5)
+	var done := _warm_frames == 0
+	ghost_view.visible = not done
+	ghost_view.transform = hidden
+	police_view.warm_up(hidden, not done)
+	if _warm_frames == 3:
+		car_view.warm_sparks(hidden.origin)
 
 
 ## Fantôme : affiché tant qu'il suit la même route, écart en secondes à l'écran.
