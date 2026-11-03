@@ -11,6 +11,11 @@
   for = "/*"
   [headers.values]
     Cache-Control = "no-cache"
+    # Isolation : permet la version « avec threads » du jeu (son mixé sur son
+    # propre fil, sans grésillement ; route construite en arrière-plan). Sans
+    # ces en-têtes, ou sur un navigateur trop ancien, la page bascule sur /lite/.
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
 
 [[headers]]
   for = "/*.wasm"

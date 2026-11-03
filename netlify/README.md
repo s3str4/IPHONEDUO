@@ -45,6 +45,17 @@ Pages (l'ancienne adresse s3str4.github.io) s'arrête : il exige un dépôt
 public sur l'offre gratuite. Le site Netlify, lui, reste public : c'est
 l'adresse qu'on partage.
 
+## Deux versions
+
+- **Adresse principale** : version « avec threads ». Le son est mixé sur son
+  propre fil (pas de grésillement quand une image est lente) et la route se
+  construit en arrière-plan. Elle exige les en-têtes d'isolation
+  (`Cross-Origin-Opener-Policy`, `Cross-Origin-Embedder-Policy`), envoyés
+  par `netlify.toml`.
+- **`/lite/`** : version sans threads, en secours. La page principale y
+  bascule toute seule si le navigateur n'est pas isolé (vieux navigateur,
+  hébergeur sans ces en-têtes comme GitHub Pages).
+
 ## Sur le téléphone
 
 - Ouvrir l'adresse dans Safari, puis **Partager → Sur l'écran d'accueil** :

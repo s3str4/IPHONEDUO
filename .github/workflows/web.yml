@@ -34,7 +34,7 @@ jobs:
           path: |
             ~/godot
             ~/.local/share/godot/export_templates
-          key: godot-${{ env.GODOT_VERSION }}-web
+          key: godot-${{ env.GODOT_VERSION }}-web-threads
 
       - name: Télécharger Godot et le modèle Web
         if: steps.cache.outputs.cache-hit != 'true'
@@ -45,7 +45,7 @@ jobs:
           curl -sSL -o g.zip "$base/Godot_v${GODOT_VERSION}_linux.x86_64.zip"
           unzip -q g.zip && rm g.zip && mv Godot_v*_linux.x86_64 godot
           curl -sSL -o t.tpz "$base/Godot_v${GODOT_VERSION}_export_templates.tpz"
-          unzip -q t.tpz "templates/web_nothreads_release.zip" "templates/version.txt"
+          unzip -q t.tpz "templates/web_nothreads_release.zip" "templates/web_release.zip" "templates/version.txt"
           mv templates/* ~/.local/share/godot/export_templates/4.7.stable/
           rm -r templates t.tpz
 
@@ -60,10 +60,13 @@ jobs:
 
       - name: Export Web
         run: |
-          mkdir -p build/web
+          mkdir -p build/web/lite
           # Numéro de version affiché sur l'écran titre (voir Hud).
           echo "${GITHUB_SHA::7}" > version.txt
-          ~/godot/godot --headless --path . --export-release "Web" build/web/index.html
+          # Avec threads à la racine (Netlify envoie les en-têtes d'isolation),
+          # sans threads dans /lite/ (secours : la page y bascule toute seule).
+          ~/godot/godot --headless --path . --export-release "Web threads" build/web/index.html
+          ~/godot/godot --headless --path . --export-release "Web" build/web/lite/index.html
           ls -la build/web
 
       # Netlify : la même version, avec netlify/netlify.toml, sur la branche
