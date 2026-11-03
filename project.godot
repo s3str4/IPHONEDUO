@@ -85,3 +85,8 @@ sky_ambient={
 "type": "color",
 "value": Color(0.12, 0.13, 0.22, 1)
 }
+
+[audio]
+
+driver/output_latency.web=80
+general/default_playback_type.web=0

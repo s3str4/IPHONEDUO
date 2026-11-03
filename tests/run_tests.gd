@@ -585,6 +585,12 @@ func _test_audio_and_double_tap() -> void:
 	var audio := AudioDirector.new()
 	root.add_child(audio)
 	await process_frame
+	# Version web : le mode « échantillons » de Godot (par défaut depuis 4.3)
+	# restait muet avec nos bus créés en cours de jeu, la réverbération et le
+	# moteur dont la hauteur change à chaque image (mesuré dans Chromium : 0,0000
+	# en sortie). Le mode « flux » (Godot mixe lui-même) doit rester choisi.
+	_check(int(ProjectSettings.get_setting("audio/general/default_playback_type.web", 1)) == 0,
+			"son : version web en mode flux (sinon muette)")
 	# Aube : la radio s'éteint, la musique de fin joue, le moteur se fait discret.
 	audio.play_dawn()
 	for i in 20:
