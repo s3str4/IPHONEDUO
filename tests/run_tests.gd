@@ -31,6 +31,7 @@ func _initialize() -> void:
 	_test_ending_scenes()
 	_test_police()
 	_test_ghost()
+	_test_fair_traffic()
 	await _test_english()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -1065,3 +1066,63 @@ func _test_ghost() -> void:
 	_check(back != null and back.score == 1234 and back.choices == [0, 1] and back.s_track == g.s_track
 			and Ghost.load_for(8, path) == null, "fantôme : sauvegardé et relu, pour sa route seulement")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
+## Trafic juste, façon OutRun : il annonce ses changements de voie, un passage
+## serré n'est pas un choc, un frottement de côté ne vous arrête pas.
+func _one_vehicle(s: float, x: float, speed: float) -> Array:
+	var tr := Traffic.new(1)
+	var v := Traffic.Vehicle.new()
+	v.s = s
+	v.x = x
+	v.target_x = x
+	v.speed = speed
+	v.cruise = speed
+	tr.vehicles.append(v)
+	tr._next_spawn_s = INF
+	return [tr, v]
+
+
+func _test_fair_traffic() -> void:
+	# Clignotant : il annonce, puis seulement il bouge.
+	var tv := _one_vehicle(300.0, 0.0, 25.0)
+	var tr: Traffic = tv[0]
+	var v: Traffic.Vehicle = tv[1]
+	var car := CarPhysics.new()
+	car.s = 0.0
+	car.x = -4.0
+	car.speed = 0.0
+	var ok := tr._try_lane_change(v, car)
+	var moved_early := false
+	for i in int(Traffic.SIGNAL_TIME * 60.0) - 3:
+		tr.update(car, 1.0 / 60.0)
+		moved_early = moved_early or absf(v.x) > 0.01
+	for i in 90:
+		tr.update(car, 1.0 / 60.0)
+	_check(ok and not moved_early and absf(v.x) > 1.0, "trafic : clignotant avant de changer de voie", "x %.2f" % v.x)
+	# Passage serré (chevauchement plus petit que la tolérance) : frôlement, pas choc.
+	tv = _one_vehicle(102.0, 0.0, 30.0)
+	tr = tv[0]
+	v = tv[1]
+	car = CarPhysics.new()
+	var reach_x := v.half_width() + CarPhysics.CAR_HALF_WIDTH
+	car.s = 101.0
+	car.x = reach_x - Traffic.HIT_TOLERANCE_X * 0.5
+	car.speed = 70.0
+	var types := []
+	for i in 30:
+		car.s += car.speed / 60.0
+		for e in tr.update(car, 1.0 / 60.0):
+			types.append(e.type)
+	_check(not "crash" in types and "near_miss" in types, "trafic : passage serré = frôlement (des points), pas choc", str(types))
+	# Frottement de côté : on garde l'essentiel de sa vitesse.
+	tv = _one_vehicle(100.0, 0.0, 30.0)
+	tr = tv[0]
+	v = tv[1]
+	car = CarPhysics.new()
+	car.s = 100.0
+	car.x = reach_x * 0.7
+	car.speed = 70.0
+	var ev := tr.update(car, 1.0 / 60.0)
+	_check(ev.size() == 1 and ev[0].type == "crash" and car.speed >= 70.0 * Traffic.SCRAPE_SPEED_KEPT - 0.01,
+			"trafic : frottement de côté, petite perte seulement", "v %.1f" % car.speed)

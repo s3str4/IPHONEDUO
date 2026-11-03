@@ -559,7 +559,7 @@ func _process(delta: float) -> void:
 	_update_chunks()
 	_worst_chunk_usec = maxi(_worst_chunk_usec, Time.get_ticks_usec() - t_chunks)
 	_place_car_and_camera(delta)
-	traffic_view.sync(traffic, track)
+	traffic_view.sync(traffic, track, delta)
 	police_view.sync(police, car, track, builder.water_side, delta)
 	_update_ghost()
 	_warm_up_step()

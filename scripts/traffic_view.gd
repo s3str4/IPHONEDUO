@@ -13,6 +13,10 @@ var _ghost_mesh: ArrayMesh
 var _pool: Array[MeshInstance3D] = []
 var _body_material: ShaderMaterial
 var _glow_material: ShaderMaterial
+## Clignotants (un par côté, partagés), et l'heure pour les faire clignoter.
+var _blinkers: Array = []
+var _blink_mesh: ArrayMesh
+var _time := 0.0
 
 
 func _ready() -> void:
@@ -21,21 +25,33 @@ func _ready() -> void:
 	_body_material.set_shader_parameter("fill", 0.15)
 	_glow_material = ShaderMaterial.new()
 	_glow_material.shader = load("res://shaders/night_glow.gdshader")
-	_glow_material.set_shader_parameter("intensity", 0.9)
+	# Feux arrière vifs : le trafic se repère de loin.
+	_glow_material.set_shader_parameter("intensity", 1.4)
 	_ghost_mesh = VehicleMesh.build(VehicleMesh.Kind.SPORT, Color(0.35, 0.05, 0.05), _body_material, _glow_material, false, false)
 	for kind in [VehicleMesh.Kind.SPORT, VehicleMesh.Kind.SEDAN, VehicleMesh.Kind.TRUCK]:
 		var palette: Array = TRUCK_COLORS if kind == VehicleMesh.Kind.TRUCK else COLORS
 		for i in palette.size():
 			_meshes[Vector2i(kind, i)] = VehicleMesh.build(kind, palette[i], _body_material, _glow_material)
+	_blink_mesh = _make_blinker()
 	for i in POOL_SIZE:
 		var mi := MeshInstance3D.new()
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		mi.visible = false
 		add_child(mi)
 		_pool.append(mi)
+		var pair := []
+		for side in [-1.0, 1.0]:
+			var b := MeshInstance3D.new()
+			b.mesh = _blink_mesh
+			b.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			b.visible = false
+			mi.add_child(b)
+			pair.append(b)
+		_blinkers.append(pair)
 
 
-func sync(traffic: Traffic, track: Track) -> void:
+func sync(traffic: Traffic, track: Track, delta := 0.016) -> void:
+	_time += delta
 	var i := 0
 	var all := traffic.vehicles.duplicate()
 	if traffic.ghost != null:
@@ -51,6 +67,30 @@ func sync(traffic: Traffic, track: Track) -> void:
 		# Léger cap pendant les changements de voie.
 		mi.rotate_object_local(Vector3.UP, -clampf(v.target_x - v.x, -1.0, 1.0) * 0.08)
 		mi.visible = true
+		# Clignotant du côté où il va, pendant l'annonce et le changement de voie.
+		var dir := signf(v.target_x - v.x)
+		var on := absf(v.target_x - v.x) > 0.2 and fmod(_time, 0.5) < 0.28
+		for k in 2:
+			var b: MeshInstance3D = _blinkers[i][k]
+			var side := -1.0 if k == 0 else 1.0
+			b.visible = on and side == dir
+			b.position = Vector3(side * (v.half_width() - 0.08), 0.75 if v.kind != VehicleMesh.Kind.TRUCK else 1.0,
+					v.half_length() + 0.03)
 		i += 1
 	for k in range(i, _pool.size()):
 		_pool[k].visible = false
+
+
+## Feu orange de clignotant (vers l'arrière), avec son halo.
+func _make_blinker() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	VehicleMesh._glow_quad(st, Vector3.ZERO, Vector2(0.22, 0.12), Color(1.0, 0.55, 0.05), 3.0)
+	var halo := SurfaceTool.new()
+	halo.begin(Mesh.PRIMITIVE_TRIANGLES)
+	Halo.add(halo, Vector3(0, 0, 0.05), 0.9, Color(1.0, 0.5, 0.05), 1.2)
+	var mesh := st.commit()
+	halo.commit(mesh)
+	mesh.surface_set_material(0, _glow_material)
+	mesh.surface_set_material(1, Halo.material())
+	return mesh

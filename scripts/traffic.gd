@@ -20,6 +20,14 @@ const WALL_SPAN := 22.0
 const SPAWN_WALL_SPAN := 40.0
 ## Avant une bifurcation, la voie du milieu se vide sur cette longueur (m).
 const FORK_CLEAR_BEFORE := 380.0
+## Clignotant : un véhicule annonce son changement de voie avant de bouger.
+const SIGNAL_TIME := 0.9
+## Tolérance des collisions (m) : il faut vraiment se chevaucher. Un passage
+## plus serré que ça compte comme un frôlement (des points), pas un choc.
+const HIT_TOLERANCE_X := 0.4
+const HIT_TOLERANCE_S := 0.4
+## Frottement de côté : vitesse gardée (le choc par l'arrière reste sévère).
+const SCRAPE_SPEED_KEPT := 0.9
 
 
 class Vehicle:
@@ -34,6 +42,8 @@ class Vehicle:
 	var cooldown := 0.0
 	## Temps restant pendant lequel le véhicule cède (règle anti-mur).
 	var yield_time := 0.0
+	## Clignotant en cours (s) avant de commencer le changement de voie.
+	var signal_time := 0.0
 	var behind_player := false
 
 	func half_length() -> float:
@@ -198,7 +208,14 @@ func _drive(v: Vehicle, car: CarPhysics, delta: float) -> void:
 	# d'un véhicule devant (sécurité) peut ralentir davantage.
 	var floor_speed := 8.0 if ahead != null and ahead.s - v.s < 30.0 else v.cruise * 0.6
 	v.speed = move_toward(v.speed, maxf(wanted, floor_speed), (10.0 if wanted < v.speed else 4.0) * delta)
-	v.x = move_toward(v.x, v.target_x, LANE_CHANGE_SPEED * delta)
+	if v.signal_time > 0.0:
+		v.signal_time -= delta
+		# Au moment de tourner : si le joueur est arrivé à côté, dans la voie visée,
+		# on renonce (le clignotant n'est pas un piège).
+		if v.signal_time <= 0.0 and absf(car.x - v.target_x) < 2.6 and absf(car.s - v.s) < 14.0:
+			v.target_x = LANES[_nearest_lane(v.x)]
+	else:
+		v.x = move_toward(v.x, v.target_x, LANE_CHANGE_SPEED * delta)
 	v.s += v.speed * delta
 
 
@@ -221,6 +238,7 @@ func _try_lane_change(v: Vehicle, car: CarPhysics) -> bool:
 		# rester libre, sinon il ferme la route.
 		if _lane_clear(lane_x, v.s, 20.0) and _third_lane_clear(v.x, lane_x, v):
 			v.target_x = lane_x
+			v.signal_time = SIGNAL_TIME
 			return true
 	return false
 
@@ -232,12 +250,15 @@ func _contact(v: Vehicle, car: CarPhysics) -> String:
 	var dx := car.x - v.x
 	var was_behind := v.behind_player
 	v.behind_player = ds < 0.0
-	if absf(ds) < reach_s and absf(dx) < reach_x - 0.1:
+	if absf(ds) < reach_s - HIT_TOLERANCE_S and absf(dx) < reach_x - HIT_TOLERANCE_X:
 		if v.cooldown > 0.0:
 			return ""
 		v.cooldown = CRASH_COOLDOWN
 		var side := signf(dx) if absf(dx) > 0.05 else 1.0
-		if ds > 0.0:
+		if absf(dx) > reach_x * 0.55:
+			# De côté : on frotte, on perd un peu, on est écarté.
+			car.speed *= minf(SCRAPE_SPEED_KEPT + car.crash_keep * 0.5, 0.97)
+		elif ds > 0.0:
 			# Par l'arrière : on repart à la vitesse du véhicule, écarté sur le côté.
 			car.speed = minf(car.speed, v.speed * (CRASH_SPEED_FACTOR + car.crash_keep))
 			car.s = minf(car.s, v.s - reach_s - 0.05)
