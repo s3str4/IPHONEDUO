@@ -1,0 +1,20 @@
+# Netlify : la version web de Route de Nuit, déjà exportée par GitHub Actions
+# (voir .github/workflows/web.yml) et poussée sur la branche « netlify ».
+# Netlify n'a rien à construire : il publie le dossier tel quel.
+
+[build]
+  publish = "."
+  command = "echo 'Rien a construire : version web deja exportee par GitHub Actions.'"
+
+# Toujours vérifier la dernière version auprès du serveur : fini le « recharge
+# deux fois » sur iPhone. Un fichier inchangé n'est pas re-téléchargé (réponse
+# 304, grâce à l'ETag), seul ce qui a changé repart.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"

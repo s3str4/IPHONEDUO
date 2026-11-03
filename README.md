@@ -8,6 +8,12 @@ Titre provisoire. Toute la conception est dans [docs/BIBLE.md](docs/BIBLE.md).
 
 Moteur : Godot 4.7 (renderer Compatibility), export iOS.
 
+## Tester sur téléphone (Netlify)
+
+Le dossier `netlify/` publie le jeu sur Netlify : GitHub Actions pousse la
+version web exportée sur la branche `netlify`, que Netlify sert telle quelle.
+Mise en place et utilisation : [netlify/README.md](netlify/README.md).
+
 ## Jouer
 
 **Sur iPhone (ou tout navigateur)** : la version web est publiée sur GitHub Pages

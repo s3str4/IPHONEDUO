@@ -9,7 +9,8 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  # write : pousser la version exportée sur la branche « netlify » (voir netlify/).
+  contents: write
   pages: write
   id-token: write
 
@@ -62,6 +63,20 @@ jobs:
           mkdir -p build/web
           ~/godot/godot --headless --path . --export-release "Web" build/web/index.html
           ls -la build/web
+
+      # Netlify : la même version, avec netlify/netlify.toml, sur la branche
+      # « netlify » (un seul commit remplacé à chaque fois). Voir netlify/README.md.
+      - name: Branche netlify
+        run: |
+          cp netlify/netlify.toml build/web/
+          cd build/web
+          git init -q -b netlify
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "Version web ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" netlify
+          rm -rf .git
 
       - uses: actions/upload-pages-artifact@v3
         with:
