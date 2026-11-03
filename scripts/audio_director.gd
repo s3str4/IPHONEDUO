@@ -34,6 +34,8 @@ var _dawn: AudioStreamPlayer
 var _engine_fade := 1.0
 var _siren: AudioStreamPlayer
 var _siren_level := 0.0
+## Diagnostic : pluie, vent et pneus muets.
+var mute_weather := false
 var _oneshots: Array[AudioStreamPlayer] = []
 var _streams := {}
 var _reverb: AudioEffectReverb
@@ -96,6 +98,9 @@ func update(speed: float, throttle: float, rain_amount: float, tunnel: bool, del
 	_wind.volume_db = linear_to_db(v * v * 0.7 + 0.001) - 7.0
 	_tires.volume_db = linear_to_db(pow(v, 1.4) * rain_amount * 0.6 + 0.001) - 9.0
 	_rain.volume_db = linear_to_db((0.0 if tunnel else rain_amount) * 0.7 + 0.001) - 7.0
+	if mute_weather:
+		for p in [_rain, _wind, _tires]:
+			p.volume_db = -80.0
 	_reverb.wet = move_toward(_reverb.wet, 0.35 if tunnel else 0.0, delta * 1.5)
 
 

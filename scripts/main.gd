@@ -252,6 +252,28 @@ func _ready() -> void:
 		hud.add_child(_fps_label)
 	audio = AudioDirector.new()
 	add_child(audio)
+	# Diagnostic (?sanspluie) : pluie, vent et pneus muets, pour savoir si le
+	# « grésillement » entendu est le bruit de la pluie.
+	if _args.has("sanspluie"):
+		audio.mute_weather = true
+	# Diagnostic (?tone) : une note pure seule, pour tester la sortie audio.
+	if _args.has("tone"):
+		for bus in ["Bruitages", "Musique"]:
+			AudioServer.set_bus_mute(AudioServer.get_bus_index(bus), true)
+		var wav := AudioStreamWAV.new()
+		wav.format = AudioStreamWAV.FORMAT_16_BITS
+		wav.mix_rate = 44100
+		var data := PackedByteArray()
+		data.resize(44100 * 2)
+		for i in 44100:
+			data.encode_s16(i * 2, int(sin(TAU * 441.0 * i / 44100.0) * 9000.0))
+		wav.data = data
+		wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav.loop_end = 44100
+		var tone := AudioStreamPlayer.new()
+		tone.stream = wav
+		add_child(tone)
+		tone.play()
 	_apply_garage()
 	_apply_settings()
 	input.double_tapped.connect(func() -> void: hud.popup(audio.next_station(), Hud.PINK, 12, 250.0))

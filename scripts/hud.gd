@@ -302,6 +302,9 @@ func _ready() -> void:
 	var ver := "dev"
 	if FileAccess.file_exists("res://version.txt"):
 		ver = FileAccess.get_file_as_string("res://version.txt").strip_edges()
+	# Diagnostic : version, threads ou lite, fréquence de mixage audio.
+	if OS.has_feature("web"):
+		ver += "  ·  " + ("threads" if OS.has_feature("threads") else "lite") + "  ·  %d Hz" % int(AudioServer.get_mix_rate())
 	_label(_overlay_logo, "v" + ver, text_font(), 7, DIM, Vector2(0, -8), HORIZONTAL_ALIGNMENT_CENTER, true, true)
 	_overlay_title = _label(_overlay, "", arcade_font(), 18, AMBER, Vector2(0, 166), HORIZONTAL_ALIGNMENT_CENTER, true)
 	_overlay_body = _label(_overlay, "", text_font(), 12, WHITE, Vector2(0, 196), HORIZONTAL_ALIGNMENT_CENTER, true)
