@@ -85,6 +85,30 @@ sky_ambient={
 "type": "color",
 "value": Color(0.12, 0.13, 0.22, 1)
 }
+car_env_tex={
+"type": "sampler2D",
+"value": ""
+}
+car_env_on={
+"type": "float",
+"value": 0.0
+}
+car_env_tan={
+"type": "float",
+"value": 2.75
+}
+car_env_x={
+"type": "vec3",
+"value": Vector3(1, 0, 0)
+}
+car_env_y={
+"type": "vec3",
+"value": Vector3(0, 1, 0)
+}
+car_env_z={
+"type": "vec3",
+"value": Vector3(0, 0, 1)
+}
 
 [audio]
 

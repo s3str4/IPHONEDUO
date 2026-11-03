@@ -33,10 +33,14 @@ var _sparks: CPUParticles3D
 func _ready() -> void:
 	material = ShaderMaterial.new()
 	material.shader = load("res://shaders/night_car.gdshader")
+	# Reflets temps réel (CarEnv) : seulement sur la voiture du joueur.
+	material.set_shader_parameter("live_env", 1.0)
 	_tail_material = ShaderMaterial.new()
 	_tail_material.shader = load("res://shaders/night_glow.gdshader")
 	_mesh_instance = MeshInstance3D.new()
 	_mesh_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Couche à part : la caméra des reflets de carrosserie ne la voit pas.
+	_mesh_instance.layers = 1 << (CarEnv.CAR_LAYER - 1)
 	add_child(_mesh_instance)
 	set_paint(0)
 	_make_sprays()

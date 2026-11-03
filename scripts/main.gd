@@ -123,6 +123,7 @@ var _patrol_said := {}
 @onready var environment: Environment = $WorldEnvironment.environment
 @onready var rain: CPUParticles3D = $Camera/Rain
 @onready var reflection: Reflection = $Reflection
+var car_env: CarEnv
 
 var _lights: LightField
 var audio: AudioDirector
@@ -207,6 +208,8 @@ func _ready() -> void:
 		$Post.visible = false
 	_lights = LightField.new()
 	reflection.source = camera
+	car_env = CarEnv.new()
+	add_child(car_env)
 	# Navigateur : reflet plus petit, Safari sur iPhone est moins rapide que l'app.
 	menus = Menus.new()
 	menus.save = save
@@ -400,6 +403,7 @@ func _apply_settings() -> void:
 	RenderingServer.global_shader_parameter_set("reflection_on", 1.0 if on else 0.0)
 	# Netteté : l'interface s'affiche à la résolution de l'écran (nette), la 3D
 	# à une résolution réglable, agrandie ensuite (le vrai coût est là).
+	car_env.set_quality(save.quality)
 	var s3d := render_scale()
 	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	get_viewport().scaling_3d_scale = s3d
@@ -708,6 +712,7 @@ func _update_lighting(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set("head_pos", car_view.global_position + fwd * 2.1 + t.basis.y * 0.7)
 	RenderingServer.global_shader_parameter_set("head_dir", (fwd - t.basis.y * 0.06).normalized())
 	reflection.follow(track.point_at(car.s), t.basis.y)
+	car_env.follow(car_view.global_transform)
 	var playing := game.state == GameRun.State.RUNNING
 	_post_material.set_shader_parameter("speed", car.speed / CarPhysics.TOP_SPEED if playing else 0.0)
 

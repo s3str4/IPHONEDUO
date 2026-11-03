@@ -18,7 +18,8 @@ var _camera := Camera3D.new()
 func _ready() -> void:
 	render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	msaa_3d = Viewport.MSAA_DISABLED
-	_camera.cull_mask = 1
+	# La voiture du joueur (sa propre couche) se reflète aussi dans la route.
+	_camera.cull_mask = 1 | (1 << (CarEnv.CAR_LAYER - 1))
 	add_child(_camera)
 	process_priority = 100
 	RenderingServer.global_shader_parameter_set("reflection_tex", get_texture())

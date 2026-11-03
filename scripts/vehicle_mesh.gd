@@ -72,19 +72,26 @@ static func _sport(body: SurfaceTool, glow: SurfaceTool, color: Color) -> void:
 	# flancs galbés, arrière large et haut, habitacle bombé.
 	var shell := SurfaceTool.new()
 	shell.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Sections lissées (trois fois plus nombreuses), ailes élargies et passages
+	# de roue découpés au-dessus des roues.
 	var rings := []
-	for sec in SPORT_BODY:
-		rings.append(_body_ring(sec[0], sec[1], sec[2], sec[3], sec[4]))
+	var sections := _densify(SPORT_BODY, 3)
+	for sec in sections:
+		var z: float = sec[0]
+		var arch := _arch(z)
+		var bottom: float = lerpf(sec[2], 0.62, arch)
+		rings.append(_body_ring_fine(z, sec[1] + 0.045 * _fender(z), bottom, sec[3] + 0.02 * _fender(z), sec[4]))
 	_loft(shell, rings, color, true, true)
 	var cabin := []
-	for sec in SPORT_CABIN:
-		cabin.append(_cabin_ring(sec[0], sec[1], sec[2], sec[3], sec[4]))
+	for sec in _densify(SPORT_CABIN, 3):
+		cabin.append(_cabin_ring_fine(sec[0], sec[1], sec[2], sec[3], sec[4]))
 	_loft(shell, cabin, GLASS_COLOR, false)
 	shell.index()
 	shell.generate_normals()
 	# Désindexer : la carrosserie reçoit ensuite des sommets sans index.
 	shell.deindex()
 	body.append_from(shell.commit(), 0, Transform3D.IDENTITY)
+	_sport_details(body, glow, color, rings)
 	# Ouïes latérales (les « râpes à fromage »).
 	for side in [-1.0, 1.0]:
 		for k in 4:
@@ -182,6 +189,126 @@ static func _loft(st: SurfaceTool, rings: Array, color: Color, caps: bool, dark_
 				for v in [c, ring[i], ring[i + 1]]:
 					st.set_color(sill if dark_sills else color)
 					st.add_vertex(v)
+
+
+## Roues de la sportive (axes en z) : élargissement des ailes et découpe des
+## passages de roue autour d'elles.
+const SPORT_WHEELS := [-1.45, 1.5]
+
+
+## Ailes : 1 au droit d'une roue, 0 au-delà de 0,75 m.
+static func _fender(z: float) -> float:
+	var f := 0.0
+	for wz in SPORT_WHEELS:
+		var d := absf(z - wz) / 0.75
+		if d < 1.0:
+			f = maxf(f, pow(cos(d * PI * 0.5), 2.0))
+	return f
+
+
+## Passage de roue : le bas de caisse remonte en arc au-dessus du pneu.
+static func _arch(z: float) -> float:
+	var f := 0.0
+	for wz in SPORT_WHEELS:
+		var d := absf(z - wz) / 0.46
+		if d < 1.0:
+			f = maxf(f, sqrt(1.0 - d * d))
+	return f
+
+
+## Sections intermédiaires (Catmull-Rom) : `steps` par intervalle.
+static func _densify(sections: Array, steps: int) -> Array:
+	var out := []
+	var n := sections.size()
+	for i in n - 1:
+		var p0: Array = sections[maxi(i - 1, 0)]
+		var p1: Array = sections[i]
+		var p2: Array = sections[i + 1]
+		var p3: Array = sections[mini(i + 2, n - 1)]
+		for s in steps:
+			var t := float(s) / steps
+			var sec := []
+			for k in p1.size():
+				var a: float = p0[k]
+				var b: float = p1[k]
+				var c: float = p2[k]
+				var d: float = p3[k]
+				sec.append(0.5 * (2.0 * b + (c - a) * t + (2.0 * a - 5.0 * b + 4.0 * c - d) * t * t
+						+ (3.0 * b - a - 3.0 * c + d) * t * t * t))
+			out.append(sec)
+	out.append(sections[n - 1])
+	return out
+
+
+## Profil fin de la coque : bas de caisse, flanc galbé, épaule arrondie,
+## dessus bombé (10 points par demi-anneau).
+static func _body_ring_fine(z: float, hw: float, bottom: float, belt: float, top: float) -> Array:
+	var mid := (bottom + belt) * 0.5
+	var half := [Vector2(hw * 0.9, bottom), Vector2(hw * 0.98, bottom + 0.05), Vector2(hw, bottom + 0.16),
+			Vector2(hw * 1.005, mid), Vector2(hw, belt - 0.07), Vector2(hw * 0.975, belt - 0.015),
+			Vector2(hw - 0.1, belt + (top - belt) * 0.32), Vector2(hw - 0.3, belt + (top - belt) * 0.78),
+			Vector2(hw * 0.42, top - 0.008), Vector2(0.0, top)]
+	return _mirror_ring(half, z)
+
+
+static func _cabin_ring_fine(z: float, base_hw: float, base: float, top_hw: float, roof: float) -> Array:
+	var half := [Vector2(base_hw, base), Vector2(lerpf(base_hw, top_hw, 0.35), lerpf(base, roof, 0.45)),
+			Vector2(lerpf(base_hw, top_hw, 0.85), lerpf(base, roof, 0.88)), Vector2(top_hw * 0.72, roof - 0.014),
+			Vector2(top_hw * 0.32, roof - 0.003), Vector2(0.0, roof)]
+	return _mirror_ring(half, z)
+
+
+## Détails de la sportive : lignes de portière et poignée,
+## filet de couleur sur les flancs, passages de roue sombres, double sortie
+## d'échappement chromée, plaque arrière éclairée.
+static func _sport_details(body: SurfaceTool, glow: SurfaceTool, color: Color, rings: Array) -> void:
+	var seam := Color(0.015, 0.015, 0.02, 0.2)
+	var chrome := Color(0.75, 0.77, 0.82, 1.0)
+	var stripe := Color(0.92, 0.36, 0.55, 1.0)
+	for side in [-1.0, 1.0]:
+		# Filet le long du flanc (point 3 du profil, mi-hauteur), suivant la coque.
+		for r in rings.size() - 1:
+			var a: Vector3 = rings[r][3] if side > 0.0 else rings[r][rings[r].size() - 4]
+			var b: Vector3 = rings[r + 1][3] if side > 0.0 else rings[r + 1][rings[r + 1].size() - 4]
+			if absf(a.z) > 2.05 or _arch(a.z) > 0.0 or _arch(b.z) > 0.0:
+				continue
+			var o := Vector3(side * 0.006, 0, 0)
+			_quad_raw(body, [a + o + Vector3(0, -0.02, 0), b + o + Vector3(0, -0.02, 0), b + o + Vector3(0, 0.02, 0),
+					a + o + Vector3(0, 0.02, 0)], stripe, Vector3(side, 0, 0))
+		# Portière : deux lignes verticales et la poignée.
+		for z in [-0.62, 0.98]:
+			_box(body, Vector3(side * 1.0, 0.56, z), Vector3(0.02, 0.4, 0.015), seam)
+		_box(body, Vector3(side * 1.0, 0.71, 0.82), Vector3(0.025, 0.035, 0.16), seam)
+		# Passages de roue sombres (l'intérieur de l'aile).
+		for wz in SPORT_WHEELS:
+			_box(body, Vector3(side * 0.82, 0.5, wz), Vector3(0.3, 0.3, 0.86), Color(0.01, 0.01, 0.012, 0.0))
+		# Sorties d'échappement.
+		_tube(body, Vector3(side * 0.52, 0.34, 2.34), 0.055, 0.12, chrome)
+	# Plaque arrière et sa lumière.
+	_box(body, Vector3(0.0, 0.46, 2.345), Vector3(0.5, 0.11, 0.01), Color(0.85, 0.85, 0.8, 0.6))
+	_glow_quad(glow, Vector3(0.0, 0.53, 2.36), Vector2(0.3, 0.02), Color(1.0, 0.95, 0.85), 0.6)
+
+
+## Quadrilatère plat (sommets non indexés) avec sa normale.
+static func _quad_raw(st: SurfaceTool, p: Array, color: Color, n: Vector3) -> void:
+	for i in [0, 1, 2, 0, 2, 3]:
+		st.set_color(color)
+		st.set_normal(n)
+		st.add_vertex(p[i])
+
+
+## Tube court dans l'axe z (sortie d'échappement), ouvert vers l'arrière.
+static func _tube(st: SurfaceTool, c: Vector3, r: float, length: float, color: Color) -> void:
+	for i in 8:
+		var a0 := TAU * i / 8.0
+		var a1 := TAU * (i + 1) / 8.0
+		var p0 := Vector3(cos(a0) * r, sin(a0) * r, 0)
+		var p1 := Vector3(cos(a1) * r, sin(a1) * r, 0)
+		var back := Vector3(0, 0, length)
+		_quad_raw(st, [c + p0 - back, c + p1 - back, c + p1, c + p0], color, ((p0 + p1) * 0.5).normalized())
+		# Intérieur noir, vu de derrière.
+		_quad_raw(st, [c + p0 * 0.75, c + p1 * 0.75, c + p1 * 0.75 - back, c + p0 * 0.75 - back],
+				Color(0.01, 0.01, 0.01, 0.0), -((p0 + p1) * 0.5).normalized())
 
 
 ## Roues rondes (octogones) avec jante claire.
