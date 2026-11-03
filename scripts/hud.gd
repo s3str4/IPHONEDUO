@@ -297,6 +297,12 @@ func _ready() -> void:
 		_overlay_logo.add_child(b)
 	_label(_overlay_logo, "ROUTE", logo_font(), 40, AMBER, Vector2(0, 80), HORIZONTAL_ALIGNMENT_CENTER, true, false, 0)
 	_label(_overlay_logo, "DE NUIT", logo_font(), 30, PINK, Vector2(0, 132), HORIZONTAL_ALIGNMENT_CENTER, true, false, 0)
+	# Version publiée (commit, écrit par GitHub Actions dans version.txt) : pour
+	# savoir quelle version tourne sur un téléphone.
+	var ver := "dev"
+	if FileAccess.file_exists("res://version.txt"):
+		ver = FileAccess.get_file_as_string("res://version.txt").strip_edges()
+	_label(_overlay_logo, "v" + ver, text_font(), 7, DIM, Vector2(0, -8), HORIZONTAL_ALIGNMENT_CENTER, true, true)
 	_overlay_title = _label(_overlay, "", arcade_font(), 18, AMBER, Vector2(0, 166), HORIZONTAL_ALIGNMENT_CENTER, true)
 	_overlay_body = _label(_overlay, "", text_font(), 12, WHITE, Vector2(0, 196), HORIZONTAL_ALIGNMENT_CENTER, true)
 	_overlay_body.offset_left = 26.0
