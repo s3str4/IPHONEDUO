@@ -1,0 +1,18 @@
+# Netlify, si le site publie la branche « main » : on publie la version web
+# déjà exportée par GitHub Actions sur la branche « netlify » (voir
+# netlify/README.md). Le mieux reste de régler Netlify sur la branche
+# « netlify » (toujours à jour ; « main » a une version de retard).
+
+[build]
+  publish = "dist"
+  command = "sh netlify/fetch_build.sh"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/*.wasm"
+  [headers.values]
+    Content-Type = "application/wasm"

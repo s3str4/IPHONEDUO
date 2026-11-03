@@ -26,6 +26,16 @@ branche telle quelle, sans rien construire.
 Ensuite, chaque modification du jeu arrive sur ce site toute seule, environ
 deux minutes après la poussée (le temps des tests et de l'export).
 
+## « Page not found » ?
+
+Netlify publie sans doute la branche `main` (son choix par défaut). Le
+fichier `netlify.toml` à la racine du dépôt rattrape ce cas : il récupère la
+version web de la branche `netlify` (avec une version de retard). Le mieux :
+*Site configuration → Build & deploy → Continuous deployment → Branches and
+deploy contexts → Configure → Production branch* : `netlify`, puis
+*Deploys → Trigger deploy → Deploy site*. **Base directory** et **Publish
+directory** : vides (ou `.`), surtout pas `netlify`.
+
 ## Dépôt privé ?
 
 Possible. Netlify lit les dépôts privés (son application GitHub demande
