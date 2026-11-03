@@ -404,6 +404,8 @@ func _apply_settings() -> void:
 	# Netteté : l'interface s'affiche à la résolution de l'écran (nette), la 3D
 	# à une résolution réglable, agrandie ensuite (le vrai coût est là).
 	car_env.set_quality(save.quality)
+	var pixel := save.pixel_art or _args.has("pixel")
+	_post_material.set_shader_parameter("pixel_art", 1.0 if pixel else 0.0)
 	var s3d := render_scale()
 	get_viewport().scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	get_viewport().scaling_3d_scale = s3d
@@ -422,6 +424,9 @@ func render_scale() -> float:
 		if not OS.has_feature("web"):
 			return 1.0
 		target = RENDER_HEIGHT[save.quality]
+		# Pixel art : l'image finale n'a que 240 lignes, inutile de calculer plus fin.
+		if save.pixel_art:
+			target = 540.0
 	return clampf(target / maxf(h, 1.0), 0.25, 1.0)
 
 

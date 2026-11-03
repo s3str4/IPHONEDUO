@@ -187,6 +187,9 @@ const EN := {
 	# --- Police -------------------------------------------------------------------------
 	"POURSUITE": "PURSUIT",
 	"PARTAGER": "SHARE",
+	"STYLE : %s": "STYLE: %s",
+	"NÉON": "NEON",
+	"PIXEL ART": "PIXEL ART",
 	"%s POINTS": "%s POINTS",
 	"J'AI VU L'AUBE": "I SAW THE DAWN",
 	"LA NUIT GAGNE": "THE NIGHT WINS",

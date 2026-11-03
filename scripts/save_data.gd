@@ -40,6 +40,8 @@ var pursuits_escaped := 0
 var busted := 0
 ## Fantôme du record affiché.
 var ghost_on := true
+## Style d'image : néon (faux) ou pixel art (vrai).
+var pixel_art := false
 
 
 static func load_or_new(p: String = PATH) -> SaveData:
@@ -77,6 +79,7 @@ static func load_or_new(p: String = PATH) -> SaveData:
 	s.pursuits_escaped = int(cfg.get_value("progress", "pursuits_escaped", 0))
 	s.busted = int(cfg.get_value("progress", "busted", 0))
 	s.ghost_on = bool(cfg.get_value("settings", "ghost", true))
+	s.pixel_art = bool(cfg.get_value("settings", "pixel_art", false))
 	return s
 
 
@@ -103,6 +106,7 @@ func write() -> void:
 	cfg.set_value("progress", "pursuits_escaped", pursuits_escaped)
 	cfg.set_value("progress", "busted", busted)
 	cfg.set_value("settings", "ghost", ghost_on)
+	cfg.set_value("settings", "pixel_art", pixel_art)
 	cfg.save(path)
 
 

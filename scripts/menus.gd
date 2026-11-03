@@ -163,6 +163,12 @@ func open_settings() -> void:
 		settings_changed.emit()
 		open_settings())
 	_content.add_child(gb)
+	var sb := _button(Lang.t("STYLE : %s") % (Lang.t("PIXEL ART") if save.pixel_art else Lang.t("NÉON")), Vector2.ZERO, Vector2(230, 26))
+	sb.pressed.connect(func() -> void:
+		save.pixel_art = not save.pixel_art
+		settings_changed.emit()
+		open_settings())
+	_content.add_child(sb)
 	_heading("LANGUE")
 	var langs := HBoxContainer.new()
 	langs.add_theme_constant_override("separation", 6)
