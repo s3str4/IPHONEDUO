@@ -44,6 +44,8 @@ class Vehicle:
 	var yield_time := 0.0
 	## Clignotant en cours (s) avant de commencer le changement de voie.
 	var signal_time := 0.0
+	## Rival (voir Rivals) : une des dix-neuf autres voitures de la nuit.
+	var rival := false
 	var behind_player := false
 
 	func half_length() -> float:

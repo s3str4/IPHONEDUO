@@ -118,6 +118,8 @@ var _rain := 1.0
 @onready var traffic_view: TrafficView = $Traffic
 var police: Police
 var pickups: Pickups
+var rivals: Rivals
+var _place := 20
 var pickup_view: PickupView
 ## Caméra : inclinaison en virage (lissée).
 var _bank := 0.0
@@ -201,6 +203,7 @@ func _ready() -> void:
 	traffic = Traffic.new(seed)
 	police = Police.new(seed)
 	pickups = Pickups.new(seed)
+	rivals = Rivals.new(seed, car.s if car != null else 0.0)
 	pickup_view = PickupView.new()
 	add_child(pickup_view)
 	police_view = PoliceView.new()
@@ -477,6 +480,7 @@ func _start() -> void:
 		return
 	hud.hide_overlay()
 	game.start(car.s)
+	rivals = Rivals.new(_seed, car.s)
 	# Captures : poursuite lancée tout de suite, police juste derrière (--police_demo).
 	if _args.has("police_demo"):
 		police.patrols[RouteMap.stage_at(car.s)] = car.s + 1.0
@@ -487,6 +491,7 @@ func _start() -> void:
 	if car.s < RouteMap.region_start(1):
 		_say(Scenario.RADIO["start"])
 		_say(Scenario.RADIO["call"])
+		_say(Scenario.RADIO["rivaux"])
 	if _args.has("autopilot") and car.speed == 0.0:
 		car.speed = 40.0
 
@@ -548,6 +553,9 @@ func _physics_process(delta: float) -> void:
 			Input.vibrate_handheld(90)
 		else:
 			game.on_near_miss()
+	if game.state == GameRun.State.RUNNING:
+		rivals.update(car, traffic, delta)
+		_update_place()
 	if game.state == GameRun.State.RUNNING:
 		for it in pickups.update(car):
 			_on_pickup(it, pickups.apply(it, game))
@@ -842,6 +850,17 @@ func _update_events() -> void:
 		_say(Scenario.RADIO["low_time"])
 
 
+## Classement : chaque rival doublé fait gagner une place.
+func _update_place() -> void:
+	var pos := rivals.position(car.s)
+	if pos < _place:
+		hud.popup(Lang.t("+1 PLACE") if _place - pos == 1 else Lang.t("+%d PLACES") % (_place - pos), Hud.AMBER, 10, 236.0)
+		if pos == 1:
+			_say(Scenario.RADIO["premier"])
+	_place = pos
+	hud.set_place(pos, Rivals.COUNT + 1)
+
+
 ## Ramassage : un jeton tinte (de plus en plus aigu dans une ligne), un bonus
 ## de temps carillonne, une étape parfaite se fête.
 var _token_streak := 0
@@ -917,6 +936,9 @@ func _on_region(_stage: int, theme_id: String) -> void:
 
 func _on_arrived(bonus: int) -> void:
 	_end_time = _time
+	# Prime de place à l'arrivée.
+	var place_bonus := Rivals.position_bonus(_place)
+	game.score += place_bonus
 	var record := _save_best(int(game.score))
 	var first_time := not _args.has("autopilot") and save.record_ending(game.ending, int(game.score))
 	# Le dernier message de Lou arrive avec l'aube.
@@ -938,6 +960,8 @@ func _on_arrived(bonus: int) -> void:
 				game.flags.size(), Menus.EVENT_NAMES.size(), Lang.t("NOUVEAU RECORD !") if record else Lang.t("RECORD %s") % Hud._group(save.best),
 				Hud._group(earned), Lang.t("  —  nouvelle teinte au garage") if first_time else ""],
 			"TOUCHE POUR REJOUER"]
+	_ending_overlay[1] = Lang.t("ARRIVÉ %s SUR %d  —  PRIME %s") % [Lang.ordinal(_place), Rivals.COUNT + 1,
+			Hud._group(place_bonus)] + "\n\n" + _ending_overlay[1]
 	_overlay_at = _time + ENDING_SCENE_TIME
 
 

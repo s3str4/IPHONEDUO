@@ -10,6 +10,9 @@ const TRUCK_COLORS := [Color(0.7, 0.7, 0.72), Color(0.45, 0.12, 0.1), Color(0.18
 
 var _meshes := {}
 var _ghost_mesh: ArrayMesh
+## Rivaux : sportives aux couleurs néon.
+var _rival_meshes: Array[ArrayMesh] = []
+const RIVAL_COLORS := [Color(0.85, 0.1, 0.45), Color(0.05, 0.55, 0.75), Color(0.85, 0.65, 0.05), Color(0.8, 0.8, 0.85), Color(0.45, 0.1, 0.8)]
 var _pool: Array[MeshInstance3D] = []
 var _body_material: ShaderMaterial
 var _glow_material: ShaderMaterial
@@ -28,6 +31,8 @@ func _ready() -> void:
 	# Feux arrière vifs : le trafic se repère de loin.
 	_glow_material.set_shader_parameter("intensity", 1.4)
 	_ghost_mesh = VehicleMesh.build(VehicleMesh.Kind.SPORT, Color(0.35, 0.05, 0.05), _body_material, _glow_material, false, false)
+	for c in RIVAL_COLORS:
+		_rival_meshes.append(VehicleMesh.build(VehicleMesh.Kind.SPORT, c, _body_material, _glow_material, false, true, {"aileron": true}))
 	for kind in [VehicleMesh.Kind.SPORT, VehicleMesh.Kind.SEDAN, VehicleMesh.Kind.TRUCK]:
 		var palette: Array = TRUCK_COLORS if kind == VehicleMesh.Kind.TRUCK else COLORS
 		for i in palette.size():
@@ -62,7 +67,12 @@ func sync(traffic: Traffic, track: Track, delta := 0.016) -> void:
 		if v.s < track.start_s() or v.s > track.end_s():
 			continue
 		var mi := _pool[i]
-		mi.mesh = _ghost_mesh if v == traffic.ghost else _meshes[Vector2i(v.kind, v.variant % 4)]
+		if v == traffic.ghost:
+			mi.mesh = _ghost_mesh
+		elif v.rival:
+			mi.mesh = _rival_meshes[v.variant % _rival_meshes.size()]
+		else:
+			mi.mesh = _meshes[Vector2i(v.kind, v.variant % 4)]
 		mi.transform = track.transform_at(v.s, v.x)
 		# Léger cap pendant les changements de voie.
 		mi.rotate_object_local(Vector3.UP, -clampf(v.target_x - v.x, -1.0, 1.0) * 0.08)

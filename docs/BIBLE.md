@@ -324,6 +324,12 @@ deux musiques en boucle sans couture (synthwave 104 bpm, lo-fi 78 bpm).
   - **Carte de score à partager** : en fin de partie, une image (la scène de
     l'aube ou la route, le logo, la destination, le score, l'adresse du
     jeu) part dans le menu de partage du téléphone avec un texte.
+  - **Arcade** : jetons néon à ramasser (lignes, serpentins ; prime d'étape
+    parfaite), bonus de temps +2 s, caméra qui penche en virage. **Dix-neuf
+    rivaux** : départ 20e, chaque rival doublé fait gagner une place, prime
+    d'arrivée selon le rang (1er : 20 000). Trafic plus juste : clignotants,
+    collisions tolérantes (un passage serré est un frôlement), frottement de
+    côté moins pénalisant.
   - Version web jouable sur iPhone (GitHub Pages), sans saccade : la route se
     construit par étapes quand le navigateur n'a pas de threads. Pause,
     premiers pas guidés, vibrations aux chocs (app).

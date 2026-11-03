@@ -34,6 +34,7 @@ func _initialize() -> void:
 	_test_fair_traffic()
 	_test_short_lines()
 	_test_pickups()
+	_test_rivals()
 	await _test_english()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -1186,3 +1187,32 @@ func _test_pickups() -> void:
 	_check(got == p.items.filter(func(i: Pickups.Item) -> bool: return i.stage == 0).size() and perfect
 			and game.time_left > t0, "ramassage : toute l'étape ramassée, prime d'étape parfaite, temps gagné",
 			"%d ramassés, parfait %s" % [got, perfect])
+
+
+func _rival_race(avg: float) -> int:
+	var track := Track.new(2, true)
+	var traffic := Traffic.new(2)
+	traffic.density = 0.0
+	var car := CarPhysics.new()
+	car.s = 50.0
+	var rv := Rivals.new(2, car.s)
+	var dt := 1.0 / 30.0
+	while car.s < RunConfig.arrival_s():
+		car.speed = avg
+		car.x = 4.0
+		car.s += avg * dt
+		traffic.update(car, dt)
+		rv.update(car, traffic, dt)
+		track.ensure(car.s + 600.0)
+		track.trim(car.s - 300.0)
+	return rv.position(car.s)
+
+
+func _test_rivals() -> void:
+	var rv := Rivals.new(1, 50.0)
+	_check(rv.position(50.0) == Rivals.COUNT + 1 and rv.position(1e9) == 1, "rivaux : départ 20e, en tête devant tout le monde")
+	var fast := _rival_race(70.0)
+	var slow := _rival_race(60.0)
+	_check(fast <= 3 and slow >= 8, "rivaux : un bon pilote finit sur le podium, un prudent loin derrière",
+			"70 m/s : %s, 60 m/s : %s" % [fast, slow])
+	_check(Lang.ordinal(1) == "1er" and Lang.ordinal(3) == "3e", "rivaux : rangs en français")

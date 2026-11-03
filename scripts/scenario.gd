@@ -35,6 +35,9 @@ const RADIO := {
 	"fantome": "La voiture à côté de vous, phares éteints... Elle ressemblait à la vôtre. Il y a dix ans.",
 	"station_vide": "Une station vide. Tout est allumé. Personne. Une seule pompe décrochée, qui pend.",
 	"tunnel": "Ce tunnel est trop long. Le temps s'est arrêté, on dirait. Profitez-en.",
+	# Les rivaux (voir Rivals).
+	"rivaux": "Cette nuit, dix-neuf autres voitures roulent vers l'aube. Personne ne sait pourquoi. Vous êtes la vingtième.",
+	"premier": "Plus personne devant vous. Juste la route, et l'aube au bout.",
 	# La police (voir Police) : Marceau est de votre côté.
 	"patrouille": "Entre nous : une patrouille attend plus loin, au bord de la route. Au-dessus de 200, elle vous prend en chasse. Moi, je n'ai rien dit.",
 	"patrouille2": "Encore une patrouille devant. Ils écoutent la radio, maintenant. À vous de voir.",
@@ -47,6 +50,10 @@ const RADIO := {
 ## Versions courtes, affichées en course (une idée, lisible d'un coup d'œil) ;
 ## le texte complet se lit à la pause. Clé : la réplique complète.
 const SHORT := {
+	"Cette nuit, dix-neuf autres voitures roulent vers l'aube. Personne ne sait pourquoi. Vous êtes la vingtième.":
+			"Dix-neuf voitures devant. Vous êtes 20e.",
+	"Plus personne devant vous. Juste la route, et l'aube au bout.":
+			"Premier. Plus personne devant.",
 	"3 h 12. Ici Marceau, Radio Nuit. À ceux qui roulent : je reste avec vous jusqu'à l'aube.":
 			"Radio Nuit, 3 h 12. Je reste avec vous jusqu'à l'aube.",
 	"Le téléphone a sonné. Une voix : « Je t'attends à l'aube. Tu sais où. » Vous ne savez pas.":

@@ -29,6 +29,16 @@ static func apply(setting: String) -> void:
 
 
 ## Nombre groupé par milliers : 12 345 en français, 12,345 en anglais.
+## Rang : 1er, 2e… / 1st, 2nd, 3rd, 4th…
+static func ordinal(n: int) -> String:
+	if code == "en":
+		var suf := "th"
+		if n % 100 < 11 or n % 100 > 13:
+			suf = ["th", "st", "nd", "rd", "th", "th", "th", "th", "th", "th"][n % 10]
+		return "%d%s" % [n, suf]
+	return "%der" % n if n == 1 else "%de" % n
+
+
 static func group(n: int) -> String:
 	var sep := "," if code == "en" else " "
 	var s := str(absi(n))
@@ -189,6 +199,15 @@ const EN := {
 	# --- Police -------------------------------------------------------------------------
 	"POURSUITE": "PURSUIT",
 	"PARTAGER": "SHARE",
+	"+1 PLACE": "+1 PLACE",
+	"+%d PLACES": "+%d PLACES",
+	"ARRIVÉ %s SUR %d  —  PRIME %s": "FINISHED %s OF %d  —  BONUS %s",
+	"Dix-neuf voitures devant. Vous êtes 20e.": "Nineteen cars ahead. You're 20th.",
+	"Premier. Plus personne devant.": "First. Nobody ahead.",
+	"Cette nuit, dix-neuf autres voitures roulent vers l'aube. Personne ne sait pourquoi. Vous êtes la vingtième.":
+			"Tonight, nineteen other cars are racing toward dawn. Nobody knows why. You're the twentieth.",
+	"Plus personne devant vous. Juste la route, et l'aube au bout.":
+			"Nobody ahead of you now. Just the road, and dawn at the end.",
 	"ÉTAPE PARFAITE +%s": "PERFECT STAGE +%s",
 	"JETONS %d/%d": "TOKENS %d/%d",
 	"STYLE : %s": "STYLE: %s",

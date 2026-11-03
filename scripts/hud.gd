@@ -63,6 +63,8 @@ var _ram_bar: ColorRect
 var _ram_label: Label
 var _pursuit_time := 0.0
 var _ghost_label: Label
+var _place: Label
+var _last_place := 0
 const GHOST_CYAN := Color(0.45, 0.9, 1.0)
 const SIREN_RED := Color(1.0, 0.25, 0.22)
 const SIREN_BLUE := Color(0.35, 0.55, 1.0)
@@ -145,6 +147,8 @@ func _ready() -> void:
 	_ghost_label = _label(_play, "", text_font(true), 9, GHOST_CYAN, Vector2(8, 32), HORIZONTAL_ALIGNMENT_LEFT)
 	_stage = _label(_play, "ÉTAPE 1/5", text_font(true), 10, DIM, Vector2(-8, 4), HORIZONTAL_ALIGNMENT_RIGHT)
 	_mult = _label(_play, "", arcade_font(), 10, AMBER, Vector2(-8, 17), HORIZONTAL_ALIGNMENT_RIGHT)
+	# Place dans la course (rivaux).
+	_place = _label(_play, "", arcade_font(), 13, WHITE, Vector2(-8, 30), HORIZONTAL_ALIGNMENT_RIGHT)
 
 	# Jauge des étapes : la nuit vers l'aube, une case par étape.
 	var seg_w := 30.0
@@ -405,6 +409,16 @@ func title_card(text: String) -> void:
 	tw.tween_property(_card, "modulate:a", 1.0, 0.4)
 	tw.tween_interval(2.2)
 	tw.tween_property(_card, "modulate:a", 0.0, 0.8)
+
+
+## Place dans la course ; elle s'allume quand on gagne une place.
+func set_place(pos: int, total: int) -> void:
+	_place.text = "%s/%d" % [Lang.ordinal(pos), total]
+	if _last_place != 0 and pos != _last_place:
+		_place.label_settings.font_color = AMBER if pos < _last_place else RED
+		var tw := create_tween()
+		tw.tween_property(_place.label_settings, "font_color", WHITE, 0.8)
+	_last_place = pos
 
 
 ## Écart avec le fantôme du record (vide : rien) ; cyan devant, rouge derrière.
