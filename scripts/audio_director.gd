@@ -12,7 +12,9 @@ extends Node
 const GEARS := [0.0, 15.0, 28.0, 41.0, 54.0, 66.0, 80.0]
 const STATIONS := [
 	{"name": "RADIO NUIT 98.4", "music": "music_synthwave"},
-	{"name": "BLEU NUIT 103.7", "music": "music_lofi"},
+	{"name": "ITALO NUIT 89.2", "music": "music_italo"},
+	{"name": "EURO 90 FM", "music": "music_euro"},
+	{"name": "BALLADES FM 101.5", "music": "music_ballad"},
 	{"name": "RADIO ÉTEINTE", "music": ""},
 ]
 

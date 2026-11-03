@@ -401,6 +401,222 @@ def dawn():
     return reverb(track * fade, 2.6, 0.35)
 
 
+# --- Radios années 80-90 ---------------------------------------------------------
+# Trois stations de plus, chacune avec sa signature d'époque : basse en octaves
+# et cloches FM (italo disco), piano house et supersaw (eurodance), piano
+# électrique FM et caisse claire à réverbération coupée (ballade). Leur propre
+# générateur aléatoire : les autres sons restent identiques.
+
+r80 = np.random.default_rng(1986)
+
+
+def fm(freq, t, ratio, index, decay_index=0.6):
+    """Synthèse FM à deux opérateurs (façon DX7) : l'indice décroît, le son s'adoucit."""
+    idx = index * np.exp(-t / decay_index)
+    return np.sin(2 * np.pi * freq * t + idx * np.sin(2 * np.pi * freq * ratio * t))
+
+
+def chorus(x, depth=0.0025, rate=0.6, mix=0.5):
+    """Chorus : copie retardée dont le retard ondule (épaissit les nappes)."""
+    n = len(x)
+    t = np.arange(n) / SR
+    d = (0.008 + depth * (1 + np.sin(2 * np.pi * rate * t))) * SR
+    idx = np.clip(np.arange(n) - d, 0, n - 1)
+    lo = np.floor(idx).astype(int)
+    fr = idx - lo
+    hi = np.minimum(lo + 1, n - 1)
+    return x * (1 - mix) + (x[lo] * (1 - fr) + x[hi] * fr) * mix
+
+
+def linn_kick(gain=1.0):
+    t = t_axis(0.35)
+    f = 50 + 110 * np.exp(-t / 0.025)
+    click = r80.normal(0, 1, len(t)) * np.exp(-t / 0.003) * 0.3
+    return (np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t / 0.16) + click) * gain
+
+
+def gated_snare(gain=1.0, gate=0.32):
+    """Caisse claire des années 80 : grosse réverbération coupée net."""
+    t = t_axis(0.6)
+    body = np.sin(2 * np.pi * 185 * t) * np.exp(-t / 0.06)
+    noise = fft_filter(r80.normal(0, 1, len(t)), 900, 8000) * np.exp(-t / 0.12)
+    hitn = body * 0.7 + noise
+    wet = reverb(np.stack([hitn, hitn], 1), 1.2, 0.9, seed=8)[:, 0]
+    g = (t < gate).astype(float) * np.clip((gate - t) / 0.02, 0, 1)
+    return (hitn * 0.6 + wet * 1.4 * g) * gain
+
+
+def clap(gain=1.0):
+    t = t_axis(0.25)
+    n = fft_filter(r80.normal(0, 1, len(t)), 1000, 6000)
+    e = np.zeros_like(t)
+    for k, d in enumerate((0.0, 0.011, 0.022)):
+        e += (t >= d) * np.exp(-np.maximum(t - d, 0) / (0.006 if k < 2 else 0.09))
+    return n * e * gain
+
+
+def hat909(open_=False, gain=1.0):
+    t = t_axis(0.3 if open_ else 0.06)
+    n = fft_filter(r80.normal(0, 1, len(t)), 7000, None)
+    return n * np.exp(-t / (0.09 if open_ else 0.014)) * gain
+
+
+def poly_pad(notes, dur, cutoff=2400, attack=0.4):
+    """Nappe polyphonique : scies désaccordées, filtre doux, chorus."""
+    n = int(SR * dur)
+    tt = np.arange(n) / SR
+    x = np.zeros(n)
+    for m in notes:
+        for det in (-0.005, 0.0, 0.005):
+            x += saw(note_freq(m) * (1 + det), tt, 10)
+    x = fft_filter(x, 150, cutoff) * env(n, attack, dur, 0.85, min(0.6, dur * 0.3))
+    return chorus(x / max(1, len(notes)))
+
+
+def italo():
+    """Italo disco, 118 bpm : basse en octaves, boîte à rythmes, cloches FM,
+    nappes, mélodie carrée avec vibrato. Am F C G."""
+    bpm = 118
+    beat = 60 / bpm
+    bars = 32
+    track = np.zeros((int(SR * bars * 4 * beat), 2))
+    prog = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]]
+    melody = [69, 72, 76, 74, 72, 71, 72, 69, 67, 69, 71, 72, 74, 72, 71, 67]
+    for bar in range(bars):
+        chord = prog[(bar // 2) % 4]
+        t0 = bar * 4 * beat
+        intro = bar < 4
+        # Basse en octaves, doubles croches : LE son italo.
+        for i in range(16):
+            m = chord[0] - 24 + (12 if i % 2 else 0)
+            n = int(SR * beat * 0.22)
+            tt = np.arange(n) / SR
+            b = fft_filter(saw(note_freq(m), tt, 16), None, 1100 + 500 * (i % 2)) * env(n, 0.002, 0.07, 0.2, 0.01)
+            place(track, b, t0 + i * beat / 4, 0.3 if not intro else 0.18)
+        if bar % 2 == 0:
+            pad = poly_pad([m + 12 for m in chord], 8 * beat, 2600)
+            place(track, pad, t0, 0.07, -0.4)
+            place(track, pad, t0 + 0.015, 0.07, 0.4)
+        if not intro:
+            for i in range(4):
+                place(track, linn_kick(), t0 + i * beat, 0.6)
+                if i in (1, 3):
+                    place(track, clap(), t0 + i * beat, 0.3, 0.1)
+                    place(track, gated_snare(gate=0.22), t0 + i * beat, 0.18)
+            for i in range(8):
+                place(track, hat909(open_=(i % 2 == 1)), t0 + i * beat / 2, 0.06 if i % 2 else 0.05, 0.3)
+        # Cloches FM en arpège.
+        for i in range(8):
+            m = chord[i % 3] + 24
+            tt = t_axis(0.6)
+            bell = fm(note_freq(m), tt, 3.5, 2.5, 0.25) * np.exp(-tt / 0.3)
+            place(track, bell, t0 + i * beat / 2 + beat / 4, 0.04, 0.6 if i % 2 else -0.6)
+        # Mélodie (après l'intro, et pas pendant la pause).
+        if 8 <= bar < 24 or bar >= 28:
+            for i in range(2):
+                m = melody[(bar * 2 + i) % len(melody)]
+                n = int(SR * beat * 1.8)
+                tt = np.arange(n) / SR
+                vib = 1 + 0.006 * np.sin(2 * np.pi * 6.0 * tt) * np.clip(tt / 0.25, 0, 1)
+                lead = square(note_freq(m), tt * vib, 11) * env(n, 0.01, 1.0, 0.6, 0.15)
+                lead = fft_filter(lead, None, 3800)
+                place(track, lead, t0 + i * 2 * beat, 0.07, -0.1)
+                place(track, lead, t0 + i * 2 * beat + beat * 0.75, 0.03, 0.5)
+    return reverb(track, 1.6, 0.25)
+
+
+def eurodance():
+    """Eurodance 90, 130 bpm : kick à chaque temps, basse à contretemps,
+    accords de piano house (FM), supersaw, charleston ouvert à contretemps."""
+    bpm = 130
+    beat = 60 / bpm
+    bars = 32
+    track = np.zeros((int(SR * bars * 4 * beat), 2))
+    prog = [[50, 53, 57], [46, 50, 53], [48, 52, 55], [45, 49, 52]]   # Dm Bb C A
+    riff = [0, 0, 2, 0, 1, 0, 2, 1]
+    for bar in range(bars):
+        chord = prog[bar % 4]
+        t0 = bar * 4 * beat
+        build = bar < 4
+        for i in range(4):
+            place(track, linn_kick(), t0 + i * beat, 0.42)
+            if not build:
+                place(track, hat909(open_=True), t0 + i * beat + beat / 2, 0.09, 0.25)
+                if i in (1, 3):
+                    place(track, clap(), t0 + i * beat, 0.25)
+            # Basse à contretemps.
+            n = int(SR * beat * 0.4)
+            tt = np.arange(n) / SR
+            b = fft_filter(saw(note_freq(chord[0] - 12), tt, 14), None, 700) * env(n, 0.003, 0.15, 0.3, 0.03)
+            place(track, b, t0 + i * beat + beat / 2, 0.2)
+        # Piano house : accords plaqués, syncopés.
+        if not build:
+            for k, pos in enumerate((0.0, 0.75, 1.5, 2.5, 3.25)):
+                tt = t_axis(0.5)
+                x = sum(fm(note_freq(m + 12), tt, 1.0, 1.8, 0.12) + 0.4 * fm(note_freq(m + 24), tt, 2.0, 1.0, 0.08)
+                        for m in chord) * np.exp(-tt / 0.22)
+                place(track, fft_filter(x, 200, 6000), t0 + pos * beat, 0.16, -0.2 + 0.1 * k)
+        # Supersaw en riff, sections principales.
+        if 8 <= bar < 24 or bar >= 28:
+            for i in range(8):
+                m = chord[riff[i]] + 24
+                n = int(SR * beat * 0.45)
+                tt = np.arange(n) / SR
+                x = sum(saw(note_freq(m) * (1 + d), tt, 12) for d in (-0.012, -0.006, 0.0, 0.006, 0.012))
+                x = fft_filter(x, 300, 5000) * env(n, 0.005, 0.25, 0.3, 0.05)
+                place(track, chorus(x), t0 + i * beat / 2, 0.07, 0.4 if i % 2 else -0.4)
+    return reverb(track, 1.2, 0.18)
+
+
+def ballad():
+    """Power ballad 86, 84 bpm : piano électrique FM (DX7), basse ronde,
+    cordes, caisse claire énorme à réverbération coupée. C G Am F."""
+    bpm = 84
+    beat = 60 / bpm
+    bars = 16
+    track = np.zeros((int(SR * bars * 4 * beat), 2))
+    prog = [[48, 52, 55, 60], [43, 50, 55, 59], [45, 52, 57, 60], [41, 48, 53, 57]]
+    melody = [76, 74, 72, 74, 76, 79, 77, 76, 74, 72, 71, 72, 74, 72, 69, 67]
+    for bar in range(bars):
+        chord = prog[bar % 4]
+        t0 = bar * 4 * beat
+        # Piano électrique FM : accord, puis notes égrenées.
+        for k, (pos, notes) in enumerate(((0.0, chord[1:]), (1.5, chord[2:]), (2.0, chord[1:3]), (3.0, chord[2:]))):
+            tt = t_axis(2.2)
+            x = sum(fm(note_freq(m + 12), tt, 1.0, 2.2, 0.5) + 0.25 * fm(note_freq(m + 12), tt, 14.0, 0.6, 0.05)
+                    for m in notes) * np.exp(-tt / 0.9)
+            place(track, x, t0 + pos * beat, 0.05, -0.3 + 0.2 * k)
+        # Basse ronde.
+        n = int(SR * beat * 3.8)
+        tt = np.arange(n) / SR
+        b = (np.sin(2 * np.pi * note_freq(chord[0] - 12) * tt) + 0.3 * np.sin(4 * np.pi * note_freq(chord[0] - 12) * tt)) \
+            * env(n, 0.01, 2.0, 0.6, 0.3)
+        place(track, b, t0, 0.28)
+        # Cordes à partir de la 5e mesure.
+        if bar >= 4:
+            place(track, poly_pad([m + 12 for m in chord], 4 * beat, 1800, 0.8), t0, 0.06, 0.3)
+        # Batterie : la caisse claire énorme sur 2 et 4.
+        if bar >= 2:
+            for i in range(4):
+                if i in (0, 2):
+                    place(track, linn_kick(), t0 + i * beat, 0.55)
+                else:
+                    place(track, gated_snare(gate=0.4), t0 + i * beat, 0.32)
+            for i in range(8):
+                place(track, hat909(), t0 + i * beat / 2, 0.035, 0.3)
+        # Mélodie « guitare chantée » : sinus et scie douce, vibrato lent.
+        if bar >= 4:
+            for i in range(2):
+                m = melody[(bar * 2 + i) % len(melody)]
+                n = int(SR * beat * 1.9)
+                tt = np.arange(n) / SR
+                vib = 1 + 0.008 * np.sin(2 * np.pi * 5.0 * tt) * np.clip(tt / 0.4, 0, 1)
+                lead = (np.sin(2 * np.pi * note_freq(m) * tt * vib) + 0.35 * saw(note_freq(m), tt * vib, 6)) \
+                    * env(n, 0.04, 1.5, 0.7, 0.2)
+                place(track, fft_filter(lead, None, 3000), t0 + i * 2 * beat, 0.08, 0.15)
+    return reverb(track, 2.4, 0.32)
+
+
 def main():
     # Moteur : passe-bas pour garder le grondement et la montée, sans grésillement.
     save("engine_low", fft_filter(engine(40.0, 2.0, 0.2), None, 1400) * 0.9, loop=True)
@@ -416,9 +632,11 @@ def main():
     save("blip", blip())
     save("thunder", thunder())
     save("music_synthwave", synthwave(), loop=True)
-    save("music_lofi", lofi(), loop=True)
     save("dawn", dawn())
     save("siren", siren(), loop=True)
+    save("music_italo", italo(), loop=True)
+    save("music_euro", eurodance(), loop=True)
+    save("music_ballad", ballad(), loop=True)
 
 
 if __name__ == "__main__":

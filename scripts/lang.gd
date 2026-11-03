@@ -151,7 +151,9 @@ const EN := {
 
 	# --- Radio --------------------------------------------------------------------------
 	"RADIO NUIT 98.4": "NIGHT RADIO 98.4",
-	"BLEU NUIT 103.7": "MIDNIGHT BLUE 103.7",
+	"ITALO NUIT 89.2": "ITALO NIGHT 89.2",
+	"EURO 90 FM": "EURO 90 FM",
+	"BALLADES FM 101.5": "FM BALLADS 101.5",
 	"RADIO ÉTEINTE": "RADIO OFF",
 
 	# --- Route : régions, fins, panneaux -------------------------------------------------
