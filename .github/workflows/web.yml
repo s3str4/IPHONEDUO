@@ -61,6 +61,8 @@ jobs:
       - name: Export Web
         run: |
           mkdir -p build/web/lite
+          # Godot ne doit pas prendre le premier export pour des ressources du jeu.
+          touch build/.gdignore
           # Numéro de version affiché sur l'écran titre (voir Hud).
           echo "${GITHUB_SHA::7}" > version.txt
           # Avec threads à la racine (Netlify envoie les en-têtes d'isolation),
