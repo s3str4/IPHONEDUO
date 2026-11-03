@@ -112,6 +112,33 @@ void sky() {
 	}
 	col = mix(col, moon_col, moon);
 
+	// Soleil rétro synthwave : grand disque posé sur l'horizon, du jaune au
+	// magenta, coupé de bandes horizontales de plus en plus larges vers le bas.
+	// Il monte un peu avec l'aube.
+	{
+		float sa = az_delta(az, sun_azimuth);
+		float sc = mix(0.15, 0.22, dawn);
+		vec2 q = vec2(sa, h - sc);
+		float rad = 0.2;
+		float r = length(q) / rad;
+		float disc = 1.0 - smoothstep(1.0 - pixel_angle * 2.0 / rad, 1.0, r);
+		float yy = q.y / rad;
+		// Bandes : seulement dans la moitié basse, épaisseur croissante.
+		float band = 1.0;
+		if (yy < 0.35) {
+			float k = (0.35 - yy) * 8.0;
+			float gap = clamp(0.1 + (0.35 - yy) * 0.5, 0.0, 0.75);
+			// Bord de bande anticrénelé (taille d'un pixel en unités de bande).
+			float aa = pixel_angle / rad * 8.0;
+			band = smoothstep(gap - aa, gap + aa, fract(k));
+		}
+		vec3 sun_top = vec3(1.0, 0.86, 0.35);
+		vec3 sun_bot = vec3(1.0, 0.18, 0.62);
+		vec3 sunc = mix(sun_bot, sun_top, smoothstep(-0.2, 0.9, yy)) * 1.2;
+		col = mix(col, sunc, disc * band);
+		// Halo rose autour du soleil.
+		col += vec3(1.0, 0.25, 0.6) * exp(-max(r - 1.0, 0.0) * 3.0) * 0.25 * (1.0 - disc);
+	}
 	// Montagnes : deux silhouettes, la plus lointaine noyée dans la brume.
 	float far_h = 0.07 + 0.11 * fbm(vec2(az * 3.0, 1.7)) + 0.03 * sin(az * 5.0);
 	float near_h = 0.03 + 0.07 * fbm(vec2(az * 6.0 + 9.0, 3.1));
@@ -122,6 +149,10 @@ void sky() {
 	if (h < near_h) {
 		col = zenith * 0.6 + haze * 0.15;
 	}
+	// Crêtes soulignées d'un trait néon (magenta au loin, cyan devant).
+	float lw = pixel_angle * 1.6;
+	col += vec3(1.0, 0.25, 0.75) * (1.0 - smoothstep(0.0, lw, abs(h - far_h))) * 0.9 * step(near_h, h);
+	col += vec3(0.25, 0.85, 1.0) * (1.0 - smoothstep(0.0, lw, abs(h - near_h))) * 1.1;
 	// Ville : immeubles aux fenêtres allumées, dans sa direction.
 	float bx = az * 90.0;
 	float bcell = floor(bx);

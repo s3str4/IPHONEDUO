@@ -21,7 +21,7 @@ const LAMP_SIGMA := 9.0          # étalement de la flaque de lumière (m)
 const LAMP_POOL_X := 5.0         # centre de la flaque, côté lampadaire
 const LAMP_POLE_X := 9.2
 const LAMP_HEIGHT := 9.0
-const LAMP_COLOR := Color(1.0, 0.62, 0.28)
+const LAMP_COLOR := Color(1.0, 0.3, 0.72)
 const GROUND_COLUMNS := [8.0, 11.0, 16.0, 24.0, 34.0, 46.0, 60.0, 80.0]
 const ROAD_COLUMNS := [-6.0, -3.0, 0.0, 3.0, 6.0]
 
@@ -93,6 +93,7 @@ func _init(p_track: Track, seed: int = 1) -> void:
 	road_material.set_shader_parameter("reflectivity", 0.5)
 	road_material.set_shader_parameter("specular_strength", 0.05)
 	road_material.set_shader_parameter("marking", 1.0)
+	road_material.set_shader_parameter("marking_glow", Vector3(0.35, 0.75, 0.95))
 	road_material.set_shader_parameter("ripples", 0.25)
 	env_material = ShaderMaterial.new()
 	env_material.shader = surface
@@ -100,6 +101,9 @@ func _init(p_track: Track, seed: int = 1) -> void:
 	env_material.set_shader_parameter("specular_strength", 0.25)
 	ground_material = env_material.duplicate()
 	ground_material.set_shader_parameter("wet", 0.1)
+	# Synthwave : terrain sombre parcouru d'une grille néon.
+	ground_material.set_shader_parameter("grid", 1.0)
+	ground_material.set_shader_parameter("albedo_color", Color(0.45, 0.4, 0.55))
 	glow_material = ShaderMaterial.new()
 	glow_material.shader = load("res://shaders/night_glow.gdshader")
 	cone_material = ShaderMaterial.new()
@@ -360,6 +364,7 @@ func step_chunk(job: Dictionary) -> bool:
 			1:
 				_build_rails(env, s0, s1)
 				_build_delineators(glow, s0, s1)
+				_build_neon_edges(glow, s0, s1)
 				_build_lamps(env, glow, s0, s1)
 			2:
 				_build_trees(env, job["index"], s0, s1)
@@ -799,6 +804,25 @@ func _build_rails(st: SurfaceTool, s0: float, s1: float) -> void:
 			_quad(st, face, [metal, metal, metal, metal], lights)
 			if i % 2 == 0:
 				_box(st, _road_pos(sa, x + 0.15 * side, 0.0), track.yaw_at(sa), Vector3(0.12, 0.8, 0.12), post, la)
+
+
+## Synthwave : un tube néon le long de chaque bord de la chaussée, magenta à
+## gauche, cyan à droite.
+const NEON_LEFT := Color(1.0, 0.25, 0.72)
+const NEON_RIGHT := Color(0.25, 0.85, 1.0)
+
+
+func _build_neon_edges(glow: SurfaceTool, s0: float, s1: float) -> void:
+	var uvs := [Vector2(0, 1), Vector2(0, 1), Vector2(0, 1), Vector2(0, 1)]
+	for i in _steps(s0, s1):
+		var sa := s0 + i * Track.STEP
+		var sb := sa + Track.STEP
+		for side in [-1.0, 1.0]:
+			var c := NEON_RIGHT if side > 0.0 else NEON_LEFT
+			var x0: float = side * 6.02
+			var x1: float = side * 6.18
+			var p := [_road_pos(sa, x0, 0.02), _road_pos(sb, x0, 0.02), _road_pos(sb, x1, 0.02), _road_pos(sa, x1, 0.02)]
+			_quad(glow, p if side > 0.0 else [p[0], p[3], p[2], p[1]], [c, c, c, c], [1.6, 1.6, 1.6, 1.6], uvs)
 
 
 ## Balises réfléchissantes sur les glissières, tous les 25 m : blanches à

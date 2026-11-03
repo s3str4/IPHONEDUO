@@ -22,6 +22,12 @@ uniform float ripples = 0.0;
 // Route : la peinture des marquages (texels clairs) est moins glissante sous la
 // pluie et renvoie la lumière des phares vers la voiture (rétroréflexion).
 uniform float marking = 0.0;
+// Néon des marquages (route) : la peinture luit d'elle-même.
+uniform vec3 marking_glow = vec3(0.0);
+// Grille néon synthwave sur le terrain (lignes du monde en x et z, en mètres).
+uniform float grid = 0.0;
+uniform vec3 grid_color : source_color = vec3(1.0, 0.25, 0.75);
+uniform float grid_size = 8.0;
 
 void fragment() {
 	vec3 P = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -67,6 +73,17 @@ void fragment() {
 		vec3 refl = texture(reflection_tex, ruv).rgb;
 		float k = clamp(fres * wetness * reflectivity * 1.4, 0.0, 0.6);
 		col = col * (1.0 - k * 0.6) + refl * k;
+	}
+	col += marking_glow * paint;
+	// Grille : traits fins anticrénelés ; quand les cases deviennent trop petites
+	// à l'écran (au loin), elle s'efface au lieu de fourmiller.
+	if (grid > 0.0) {
+		vec2 g = P.xz / grid_size;
+		vec2 fw = max(fwidth(g), vec2(1e-4));
+		vec2 a = abs(fract(g - 0.5) - 0.5) / fw;
+		float line = 1.0 - min(min(a.x, a.y) / 1.2, 1.0);
+		line *= 1.0 - smoothstep(0.12, 0.45, max(fw.x, fw.y));
+		col += grid_color * line * grid * 1.6;
 	}
 	col = mix(night_tonemap(col), fog_color.rgb, night_fog(dist));
 	ALBEDO = col;

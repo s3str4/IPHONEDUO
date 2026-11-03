@@ -61,6 +61,12 @@ static func _towers(b: RoadBuilder, env: SurfaceTool, glow: SurfaceTool, rng: Ra
 				var yaw := b.track.yaw_at(s)
 				var tone := rng.randf_range(0.05, 0.09)
 				b._box(env, b._road_pos(s, x, g), yaw, Vector3(w, h - g, d), Color(tone, tone, tone * 1.25), 0.05)
+				# Synthwave : arêtes de la façade côté route soulignées de néon.
+				var neon := RoadBuilder.NEON_RIGHT if rng.randf() < 0.5 else RoadBuilder.NEON_LEFT
+				var fx: float = x - side * (w * 0.5 - 0.05)
+				for es in [s - d * 0.5 + 0.05, s + d * 0.5 - 0.05]:
+					b._glow_box(glow, b._road_pos(es, fx, g), yaw, Vector3(0.18, h - g, 0.18), neon, 1.1)
+				b._glow_box(glow, b._road_pos(s, fx, h - 0.1), yaw, Vector3(0.18, 0.18, d), neon, 1.1)
 				var col := WINDOW_WARM if rng.randf() < 0.6 else WINDOW_COOL
 				var face_x: float = x - side * (w * 0.5 + 0.06)
 				var y := 3.0

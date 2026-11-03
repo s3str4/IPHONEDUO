@@ -24,12 +24,12 @@ const CAMERA_BACK := 8.0
 const CAMERA_HEIGHT := 4.2
 const START_S := 30.0
 
-const NIGHT_FOG := Color(0.05, 0.06, 0.12)
-const DAWN_FOG := Color(0.42, 0.3, 0.34)
-const NIGHT_HORIZON := Color(0.05, 0.06, 0.12)
-const DAWN_HORIZON := Color(0.55, 0.36, 0.38)
-const NIGHT_ZENITH := Color(0.01, 0.012, 0.03)
-const DAWN_ZENITH := Color(0.12, 0.16, 0.32)
+const NIGHT_FOG := Color(0.13, 0.04, 0.2)
+const DAWN_FOG := Color(0.55, 0.22, 0.4)
+const NIGHT_HORIZON := Color(0.42, 0.07, 0.38)
+const DAWN_HORIZON := Color(0.95, 0.38, 0.45)
+const NIGHT_ZENITH := Color(0.03, 0.01, 0.09)
+const DAWN_ZENITH := Color(0.2, 0.1, 0.38)
 const FOG_START := 40.0
 const FOG_END := 260.0
 ## Avant une bifurcation, ses directions s'affichent sur cette distance (m).
