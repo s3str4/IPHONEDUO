@@ -26,6 +26,15 @@ branche telle quelle, sans rien construire.
 Ensuite, chaque modification du jeu arrive sur ce site toute seule, environ
 deux minutes après la poussée (le temps des tests et de l'export).
 
+## Dépôt privé ?
+
+Possible. Netlify lit les dépôts privés (son application GitHub demande
+l'accès au dépôt choisi), et GitHub Actions marche aussi en privé (2 000
+minutes gratuites par mois ; un passage prend 2 à 3 minutes). Seul GitHub
+Pages (l'ancienne adresse s3str4.github.io) s'arrête : il exige un dépôt
+public sur l'offre gratuite. Le site Netlify, lui, reste public : c'est
+l'adresse qu'on partage.
+
 ## Sur le téléphone
 
 - Ouvrir l'adresse dans Safari, puis **Partager → Sur l'écran d'accueil** :

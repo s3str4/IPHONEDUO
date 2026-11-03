@@ -82,9 +82,13 @@ jobs:
         with:
           path: build/web
 
+  # GitHub Pages gratuit exige un dépôt public : si le dépôt passe en privé,
+  # cette publication échoue sans bloquer le reste (Netlify est déjà servi par
+  # la branche « netlify », poussée dans l'étape précédente).
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    continue-on-error: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
