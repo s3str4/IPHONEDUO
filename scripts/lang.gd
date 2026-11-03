@@ -189,6 +189,8 @@ const EN := {
 	# --- Police -------------------------------------------------------------------------
 	"POURSUITE": "PURSUIT",
 	"PARTAGER": "SHARE",
+	"ÉTAPE PARFAITE +%s": "PERFECT STAGE +%s",
+	"JETONS %d/%d": "TOKENS %d/%d",
 	"STYLE : %s": "STYLE: %s",
 	"NÉON": "NEON",
 	"PIXEL ART": "PIXEL ART",

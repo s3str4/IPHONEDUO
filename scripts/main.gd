@@ -117,6 +117,10 @@ var _rain := 1.0
 @onready var car_view: CarView = $Car
 @onready var traffic_view: TrafficView = $Traffic
 var police: Police
+var pickups: Pickups
+var pickup_view: PickupView
+## Caméra : inclinaison en virage (lissée).
+var _bank := 0.0
 var police_view: PoliceView
 var _patrol_said := {}
 @onready var camera: Camera3D = $Camera
@@ -196,6 +200,9 @@ func _ready() -> void:
 	Halo.material()
 	traffic = Traffic.new(seed)
 	police = Police.new(seed)
+	pickups = Pickups.new(seed)
+	pickup_view = PickupView.new()
+	add_child(pickup_view)
 	police_view = PoliceView.new()
 	add_child(police_view)
 	ghost_view = GhostView.new()
@@ -542,6 +549,9 @@ func _physics_process(delta: float) -> void:
 		else:
 			game.on_near_miss()
 	if game.state == GameRun.State.RUNNING:
+		for it in pickups.update(car):
+			_on_pickup(it, pickups.apply(it, game))
+	if game.state == GameRun.State.RUNNING:
 		for e in police.update(car, traffic, delta, builder.water_side(car.s)):
 			police.apply(e, game)
 			_on_police(e)
@@ -573,6 +583,7 @@ func _process(delta: float) -> void:
 	_worst_chunk_usec = maxi(_worst_chunk_usec, Time.get_ticks_usec() - t_chunks)
 	_place_car_and_camera(delta)
 	traffic_view.sync(traffic, track, delta)
+	pickup_view.sync(pickups, track, car.s, delta)
 	police_view.sync(police, car, track, builder.water_side, delta)
 	_update_ghost()
 	_warm_up_step()
@@ -831,6 +842,25 @@ func _update_events() -> void:
 		_say(Scenario.RADIO["low_time"])
 
 
+## Ramassage : un jeton tinte (de plus en plus aigu dans une ligne), un bonus
+## de temps carillonne, une étape parfaite se fête.
+var _token_streak := 0
+var _last_token_s := -INF
+
+
+func _on_pickup(it: Pickups.Item, perfect: bool) -> void:
+	if it.kind == Pickups.Kind.TIME:
+		audio.play("chime", -2.0, 1.3)
+		hud.popup("+%d S" % int(Pickups.TIME_BONUS), Hud.PINK, 18, 150.0)
+		return
+	_token_streak = _token_streak + 1 if it.s - _last_token_s < 30.0 else 1
+	_last_token_s = it.s
+	audio.play("blip", -12.0, 1.1 + 0.06 * mini(_token_streak, 10))
+	if perfect:
+		hud.popup(Lang.t("ÉTAPE PARFAITE +%s") % Hud._group(Pickups.PERFECT_POINTS), Hud.AMBER, 12, 170.0)
+		audio.play("chime", 0.0, 1.0)
+
+
 ## Poursuite : chaque événement se voit, s'entend et se commente.
 func _on_police(e: Dictionary) -> void:
 	match e.type:
@@ -864,6 +894,9 @@ func _on_police(e: Dictionary) -> void:
 func _on_station(index: int, added: float) -> void:
 	hud.popup("+%d" % int(added), Hud.AMBER, 32, 140.0)
 	hud.popup(Lang.t("STATION %d") % (index + 1), Hud.WHITE, 8, 188.0)
+	var tk: Array = pickups.tokens.get(index, [0, 0])
+	if tk[0] > 0:
+		hud.popup(Lang.t("JETONS %d/%d") % [tk[1], tk[0]], PickupView.TOKEN_COLOR, 9, 204.0)
 	# À chaque station, un message de Lou attend sur le répondeur.
 	var region := RouteMap.theme_id(index, game.choices)
 	var fresh := _collect_message(region)
@@ -1145,6 +1178,10 @@ func _place_car_and_camera(delta: float) -> void:
 		_shake = maxf(0.0, _shake - delta)
 		eye += Vector3(randf_range(-1, 1), randf_range(-1, 1), 0.0) * _shake * 0.25
 	camera.look_at_from_position(eye, target, Vector3.UP)
+	# La caméra penche dans les virages, d'autant plus qu'on va vite.
+	var bank := clampf(track.curvature_at(car.s + 30.0) * car.speed * car.speed * 0.0006, -0.1, 0.1)
+	_bank = lerpf(_bank, bank, 1.0 - exp(-3.0 * delta) if delta > 0.0 else 1.0)
+	camera.rotate_object_local(Vector3(0, 0, 1), _bank)
 	# Le champ s'ouvre avec la vitesse, et encore plus sous turbo.
 	_turbo_fov = lerpf(_turbo_fov, 9.0 if game.is_boosting() else 0.0, 1.0 - exp(-4.0 * delta) if delta > 0.0 else 1.0)
 	camera.fov = lerpf(60.0, 72.0, minf(car.speed / CarPhysics.TOP_SPEED, 1.0)) + _turbo_fov

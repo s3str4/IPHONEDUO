@@ -33,6 +33,7 @@ func _initialize() -> void:
 	_test_ghost()
 	_test_fair_traffic()
 	_test_short_lines()
+	_test_pickups()
 	await _test_english()
 	print("\n%s" % ("TOUT PASSE" if _failures == 0 else "%d ÉCHEC(S)" % _failures))
 	quit(1 if _failures > 0 else 0)
@@ -1143,3 +1144,45 @@ func _test_short_lines() -> void:
 			long.append(key)
 	_check(missing.is_empty(), "textes : chaque réplique a sa version courte", str(missing))
 	_check(long.is_empty(), "textes : versions courtes de 60 signes au plus (FR et EN)", str(long))
+
+
+func _test_pickups() -> void:
+	var p := Pickups.new(4)
+	var q := Pickups.new(4)
+	var same := p.items.size() == q.items.size() and p.items.size() > 200
+	var near_fork := 0
+	var times := 0
+	for i in p.items.size():
+		same = same and p.items[i].s == q.items[i].s and p.items[i].x == q.items[i].x
+		if Pickups._near_fork(p.items[i].s):
+			near_fork += 1
+		if p.items[i].kind == Pickups.Kind.TIME:
+			times += 1
+	_check(same and near_fork == 0 and times >= 5, "ramassage : jetons et bonus de temps, toujours pareils, loin des bifurcations",
+			"%d objets, %d bonus de temps, %d près d'une bifurcation" % [p.items.size(), times, near_fork])
+	# Rouler sur une ligne de jetons les ramasse ; tous ceux d'une étape = prime.
+	var game := GameRun.new()
+	game.start(0.0)
+	var car := CarPhysics.new()
+	var first: Pickups.Item = p.items[0]
+	car.x = first.x
+	var got := 0
+	var perfect := false
+	var t0 := game.time_left
+	var time_item: Pickups.Item = null
+	for it in p.items:
+		if it.kind == Pickups.Kind.TIME:
+			time_item = it
+			break
+	# Ramasser une étape entière (téléportation de jeton en jeton).
+	for it in p.items:
+		if it.stage != 0:
+			break
+		car.s = it.s
+		car.x = it.x
+		for g in p.update(car):
+			got += 1
+			perfect = p.apply(g, game) or perfect
+	_check(got == p.items.filter(func(i: Pickups.Item) -> bool: return i.stage == 0).size() and perfect
+			and game.time_left > t0, "ramassage : toute l'étape ramassée, prime d'étape parfaite, temps gagné",
+			"%d ramassés, parfait %s" % [got, perfect])
