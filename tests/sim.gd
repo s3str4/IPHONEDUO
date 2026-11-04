@@ -13,6 +13,7 @@ static func run(seed: int, driver: Autopilot.Driver, path: Array = [0, 0, 0, 0],
 	var car := CarPhysics.new()
 	var traffic := Traffic.new(seed)
 	var police := Police.new(seed)
+	var rivals := Rivals.new(seed, car.s)
 	var game := GameRun.new()
 	game.start(0.0)
 	var limit := 60.0 * 20.0
@@ -39,6 +40,7 @@ static func run(seed: int, driver: Autopilot.Driver, path: Array = [0, 0, 0, 0],
 				game.on_crash(car.s)
 			else:
 				game.on_near_miss()
+		rivals.update(car, traffic, dt)
 		for e in police.update(car, traffic, dt):
 			police.apply(e, game)
 		game.update(car.s, car.x, absf(car.slip) > 0.12 and car.speed > 45.0, dt)
@@ -46,5 +48,5 @@ static func run(seed: int, driver: Autopilot.Driver, path: Array = [0, 0, 0, 0],
 		track.ensure(car.s + 600.0)
 		track.trim(car.s - 300.0)
 		t += dt
-	return {"game": game, "car": car, "traffic_crashes": traffic_crashes, "police": police}
+	return {"game": game, "car": car, "traffic_crashes": traffic_crashes, "police": police, "rivals": rivals}
 

@@ -251,7 +251,7 @@ func _ready() -> void:
 	_radio.visible = false
 
 	# Titre de région (« LA FORÊT ») au centre, qui apparaît puis s'efface.
-	_card = _label(_play, "", arcade_font(), 18, WHITE, Vector2(0, 150), HORIZONTAL_ALIGNMENT_CENTER, true, false, 4)
+	_card = _label(_play, "", arcade_font(), 18, WHITE, Vector2(0, 172), HORIZONTAL_ALIGNMENT_CENTER, true, false, 4)
 	_card.modulate.a = 0.0
 
 	# Conseils de la première partie, en bas de l'écran.

@@ -114,16 +114,27 @@ func _init(p_track: Track, seed: int = 1) -> void:
 	water_material.set_shader_parameter("reflectivity", 1.0)
 	water_material.set_shader_parameter("specular_strength", 1.2)
 	water_material.set_shader_parameter("ripples", 0.6)
-	_materials[RouteMap.THEMES["autoroute"]["lamp_color"]] = _tinted(RouteMap.THEMES["autoroute"]["lamp_color"])
+	_materials[[RouteMap.THEMES["autoroute"]["lamp_color"], false]] = _tinted(RouteMap.THEMES["autoroute"]["lamp_color"])
 
 
 ## Matériaux route / décor / terrain teintés par la lumière des lampadaires.
-func _tinted(c: Color) -> Array:
+func _tinted(c: Color, snow := false) -> Array:
 	var out := []
 	for m in [road_material, env_material, ground_material]:
 		var d: ShaderMaterial = m.duplicate()
 		d.set_shader_parameter("baked_tint", Vector3(c.r, c.g, c.b))
 		out.append(d)
+	# Neige : le sol garde sa blancheur (le terrain sombre de la grille néon
+	# éteignait le Col et la Route blanche) ; grille plus discrète dessus.
+	if snow:
+		out[2].set_shader_parameter("albedo_color", Color(1.0, 1.0, 1.05))
+		out[2].set_shader_parameter("self_light", 0.55)
+		out[2].set_shader_parameter("grid", 0.45)
+		# La chaussée aussi est enneigée : pâle, moins brillante.
+		out[0].set_shader_parameter("albedo_color", Color(1.6, 1.6, 1.8))
+		out[0].set_shader_parameter("self_light", 0.35)
+		out[0].set_shader_parameter("wet", 0.35)
+		out[0].set_shader_parameter("reflectivity", 0.2)
 	return out
 
 
@@ -135,9 +146,11 @@ func theme_at(s: float) -> Dictionary:
 ## Matériaux [route, décor, terrain] de l'ambiance (teinte de ses lampadaires).
 func _materials_for(theme: Dictionary) -> Array:
 	var c: Color = theme.get("lamp_color", LAMP_COLOR)
-	if not _materials.has(c):
-		_materials[c] = _tinted(c)
-	return _materials[c]
+	var snow: bool = theme.get("snow", false)
+	var key := [c, snow]
+	if not _materials.has(key):
+		_materials[key] = _tinted(c, snow)
+	return _materials[key]
 
 
 # --- Lumière précalculée ----------------------------------------------------

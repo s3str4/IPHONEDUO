@@ -22,6 +22,9 @@ uniform float ripples = 0.0;
 // Route : la peinture des marquages (texels clairs) est moins glissante sous la
 // pluie et renvoie la lumière des phares vers la voiture (rétroréflexion).
 uniform float marking = 0.0;
+// Lueur propre (neige au clair de lune) : éclaire la surface sans lampe.
+uniform float self_light = 0.0;
+uniform vec3 self_tint : source_color = vec3(0.75, 0.78, 1.0);
 // Néon des marquages (route) : la peinture luit d'elle-même.
 uniform vec3 marking_glow = vec3(0.0);
 // Grille néon synthwave sur le terrain (lignes du monde en x et z, en mètres).
@@ -75,6 +78,7 @@ void fragment() {
 		col = col * (1.0 - k * 0.6) + refl * k;
 	}
 	col += marking_glow * paint;
+	col += base * self_tint * self_light;
 	// Grille : traits fins anticrénelés ; quand les cases deviennent trop petites
 	// à l'écran (au loin), elle s'efface au lieu de fourmiller.
 	if (grid > 0.0) {
