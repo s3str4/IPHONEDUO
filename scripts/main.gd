@@ -638,8 +638,11 @@ func _process(delta: float) -> void:
 	# Journal de la poursuite (captures : trouver le bon moment).
 	if _args.has("police_log") and police.active() and Engine.get_process_frames() % 15 == 0:
 		print("police t %.2f %s écart %.1f x %.1f/%.1f" % [_time, Police.State.keys()[police.state], police.gap(car), police.x, car.x])
+	if _args.has("dc_log") and _time > 5.0:
+		print("dessin ", Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	if _args.has("capture") and _time >= float(_args.get("capture_at", "6")):
 		print("état %d  s %.1f  ancre %.1f  fin %d  t %.1f/%.1f" % [game.state, car.s, _anchor, game.ending, _time, _end_time])
+		print("appels de dessin : %d, objets : %d, primitives : %d" % [Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME), Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)])
 		print("tronçons en retard : %d images ; pire construction dans une image : %.1f ms" % [
 				_late_frames, _worst_chunk_usec / 1000.0])
 		get_viewport().get_texture().get_image().save_png(_args["capture"])

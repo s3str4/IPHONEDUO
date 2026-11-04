@@ -16,6 +16,8 @@ const FOV := 140.0
 const PITCH := 40.0
 
 var _camera := Camera3D.new()
+var _enabled := true
+var _frame := 0
 
 
 func _ready() -> void:
@@ -36,12 +38,17 @@ func _ready() -> void:
 ## Qualité : 0 éteint, 1 petite image, 2 normale.
 func set_quality(q: int) -> void:
 	size = Vector2i(96, 96) if q == 1 else Vector2i(128, 128)
-	render_target_update_mode = SubViewport.UPDATE_ALWAYS if q > 0 else SubViewport.UPDATE_DISABLED
+	_enabled = q > 0
+	render_target_update_mode = SubViewport.UPDATE_ONCE if _enabled else SubViewport.UPDATE_DISABLED
 	RenderingServer.global_shader_parameter_set("car_env_on", 1.0 if q > 0 else 0.0)
 
 
-## Suit la voiture (transformation de la carrosserie).
+## Suit la voiture (transformation de la carrosserie). L'image n'est refaite
+## qu'une fois sur deux : à l'œil, ça ne se voit pas, et ça épargne le téléphone.
 func follow(car: Transform3D) -> void:
+	_frame += 1
+	if _enabled and _frame % 2 == 0:
+		render_target_update_mode = SubViewport.UPDATE_ONCE
 	var fwd := -car.basis.z.normalized()
 	var up := car.basis.y.normalized()
 	var look := (fwd * cos(deg_to_rad(PITCH)) + up * sin(deg_to_rad(PITCH))).normalized()
